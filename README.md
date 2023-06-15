@@ -215,6 +215,14 @@ var authentication = new AuthenticationHeaderValue("Bearer", "Token");
 var request = _apiClientConnecton.CreateGet<T>("url", cts.Token, authentication: authentication);
 ```
 
+## Troubleshoot 
+When using IL2CPP and ManagedStrippingLevel unused types won't be compiled.
+To fix that there is an utility class to enforce ahead of time (AOT) compilation of types.
+More info here: [INFO](https://github.com/jilleJr/Newtonsoft.Json-for-Unity/wiki/Reference-Newtonsoft.Json.Utilities.AotHelper)
+```csharp
+// call from any monobehaviout object to ensure types preservation.
+AotEnsureTypes.EnsureTypes();
+```
 
 ## Dependencies
 
