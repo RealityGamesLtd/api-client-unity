@@ -89,33 +89,37 @@ public class ApiClientExampleController : MonoBehaviour
         responseView.SetActive(true);
         responseText.text = "";
 
-        var request = _apiClientConnecton.CreatePost<Response<AnonRegisterResponse>>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
-        var response = await request.Send();
+        var request = _apiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+        var httpResponse = await request.Send();
+        var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);
 
-        if (response.HasNoErrors)
+        if (httpResponse.HasNoErrors)
         {
-            var responseContent = response as HttpResponse<Response<AnonRegisterResponse>>;
+            var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>>;
             Debug.Log(responseContent.Content.response.playerId);
             responseText.text = responseContent.Content.response.playerId;
         }
         else
         {
-            if (!response.IsAborted)
+            if (!httpResponse.IsAborted)
             {
                 Debug.Log("error");
-            }
 
-            if (response is NetworkErrorHttpResponse ner)
-            {
-                Debug.Log(ner.Message);
-            }
-            else if (response is TimeoutHttpResponse t)
-            {
-                Debug.Log("Timeout");
-            }
-            else if (response is ParsingErrorHttpResponse per)
-            {
-                Debug.Log(per.Message);
+                if (httpResponse is NetworkErrorHttpResponse ner)
+                {
+                    Debug.Log(ner.Message);
+                    response.SetError(ResponseErrorCode.Unknown, "User friendly Network Error message");
+                }
+                else if (httpResponse is TimeoutHttpResponse t)
+                {
+                    Debug.Log("Timeout");
+                    response.SetError(ResponseErrorCode.Unknown, "User friendly Timeout Error message");
+                }
+                else if (httpResponse is ParsingErrorHttpResponse per)
+                {
+                    Debug.Log(per.Message);
+                    response.SetError(ResponseErrorCode.Unknown, per.Message);
+                }
             }
         }
     }
@@ -139,32 +143,36 @@ public class ApiClientExampleController : MonoBehaviour
 
         var request = _apiClientConnecton.CreateGraphQLRequest<ResponseType>(query, _cts.Token);
 
-        var response = await request.Send();
+        var httpResponse = await request.Send();
+        var response = new ResponseWithContent<ResponseType, ResponseErrorCode>(httpResponse);
 
-        if (response.HasNoErrors)
+        if (httpResponse.HasNoErrors)
         {
-            var responseContent = response as HttpResponse<ResponseType>;
+            var responseContent = httpResponse as HttpResponse<ResponseType>;
             Debug.Log(responseContent.Content.__type.Name);
             responseText.text = responseContent.Content.__type.Name;
         }
         else
         {
-            if (!response.IsAborted)
+            if (!httpResponse.IsAborted)
             {
                 Debug.Log("error");
-            }
 
-            if (response is NetworkErrorHttpResponse ner)
-            {
-                Debug.Log(ner.Message);
-            }
-            else if (response is TimeoutHttpResponse t)
-            {
-                Debug.Log("Timeout");
-            }
-            else if (response is ParsingErrorHttpResponse per)
-            {
-                Debug.Log(per.Message);
+                if (httpResponse is NetworkErrorHttpResponse ner)
+                {
+                    Debug.Log(ner.Message);
+                    response.SetError(ResponseErrorCode.Unknown, "User friendly Network Error message");
+                }
+                else if (httpResponse is TimeoutHttpResponse t)
+                {
+                    Debug.Log("Timeout");
+                    response.SetError(ResponseErrorCode.Unknown, "User friendly Timeout Error message");
+                }
+                else if (httpResponse is ParsingErrorHttpResponse per)
+                {
+                    Debug.Log(per.Message);
+                    response.SetError(ResponseErrorCode.Unknown, "User friendly Content Parsing Error message");
+                }
             }
         }
     }
@@ -225,19 +233,19 @@ public class ApiClientExampleController : MonoBehaviour
         public LaunchResponse __type { get; set; }
     }
 
-    public class Response
+    public class LrtResponse
     {
-        public Meta meta;
+        public LrtMeta meta;
     }
 
     [System.Serializable]
-    public class Response<T>
+    public class LrtResponse<T>
     {
         public T response;
-        public Meta meta;
+        public LrtMeta meta;
     }
 
-    public class Meta
+    public class LrtMeta
     {
         public int code;
         public string message, landlordErrorCode;
@@ -276,5 +284,10 @@ public class ApiClientExampleController : MonoBehaviour
         public string PlayerId { get; }
         public string AccessToken { get; }
         public string RefreshToken { get; }
+    }
+
+    public enum ResponseErrorCode
+    {
+        Unknown
     }
 }
