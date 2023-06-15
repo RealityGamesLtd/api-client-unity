@@ -16,7 +16,7 @@ IApiClientConnection apiClientConnecton = new ApiClientConnection(
 
 ### Make REST.API request
 ```csharp
-var request = _apiClientConnecton.CreatePost<Response<AnonRegisterResponse>>("url", null, _cts.Token);
+var request = apiClientConnecton.CreatePost<T>("url", null, cts.Token);
 var httpResponse = await request.Send();
 // process response
 // ...
@@ -25,40 +25,40 @@ Other REST.API variations can be created this way
 
 #### Get
 ```csharp
-var request = _apiClientConnecton.CreateGet<T>("url", _cts.Token);
+var request = apiClientConnecton.CreateGet<T>("url", cts.Token);
 ```
 or
 ```csharp
-var request = _apiClientConnecton.CreateGet("url", _cts.Token);
+var request = apiClientConnecton.CreateGet("url", cts.Token);
 ```
 #### Post
 ```csharp
-var request = _apiClientConnecton.CreatePost<T>("url", "body", _cts.Token);
+var request = apiClientConnecton.CreatePost<T>("url", "body", cts.Token);
 ```
 or
 ```csharp
-var request = _apiClientConnecton.CreatePost("url", "body", _cts.Token);
+var request = apiClientConnecton.CreatePost("url", "body", cts.Token);
 ```
 #### Put
 ```csharp
-var request = _apiClientConnecton.CreatePut<T>("url", "body", _cts.Token);
+var request = apiClientConnecton.CreatePut<T>("url", "body", cts.Token);
 ```
 or
 ```csharp
-var request = _apiClientConnecton.CreatePut("url", "body", _cts.Token);
+var request = apiClientConnecton.CreatePut("url", "body", cts.Token);
 ```
 #### Delete
 ```csharp
-var request = _apiClientConnecton.CreateDelete<T>("url", _cts.Token);
+var request = apiClientConnecton.CreateDelete<T>("url", cts.Token);
 ```
 or
 ```csharp
-var request = _apiClientConnecton.CreateDelete("url", _cts.Token);
+var request = apiClientConnecton.CreateDelete("url", cts.Token);
 ```
 
 ### Make Stream request
 ```csharp
-var request = apiClientConnecton.CreateGetStreamRequest("url, _streamRequestCts.Token);
+var request = apiClientConnecton.CreateGetStreamRequest("url, cts.Token);
 await request.Send<StreamData>(streamResponse =>
 {
     // process response
@@ -67,6 +67,8 @@ await request.Send<StreamData>(streamResponse =>
 ```
 
 ### Make GraphQL request with query
+By using Query Builder
+More detailed informations about creating queries [HERE](GraphQLQueryBuilder/README.md).
 ```csharp
 var query = new Query()
     .Name("__type")
@@ -77,14 +79,13 @@ var httpResponse = await request.Send<ResponseType>();
 // process response
 // ...
 ```
-More detailed informations about creating queries [HERE](GraphQLQueryBuilder/README.md)
 
-or
+or by using query string
 
 ```csharp
 var request = apiClientConnecton.CreateGraphQLRequest("query {__type(name:\"users\"){name}}", _cts.Token);
 ```
-or
+or by using query string with variables
 ```csharp
 var variables = new {
         name = "cGVvcGxlOjE="
@@ -105,7 +106,7 @@ It can be achieved by setting `useDefaultHeaders` to false while creating
 a request.
  Add new default header
 ```csharp
-var request = _apiClientConnecton.CreateGet<T>("url", _cts.Token, useDefaultHeaders: false);
+var request = _apiClientConnecton.CreateGet<T>("url", cts.Token, useDefaultHeaders: false);
 ```
 
 ## Error handling
@@ -163,7 +164,7 @@ else
         }
     }
 }
-```csharp
+```
 
 ## Retry policy
 By dafault each request will be sent only once.
@@ -180,7 +181,7 @@ private static HttpStatusCode[] _httpStatusCodesWorthRetrying = {
 private readonly IApiClientConnection _apiClientConnecton = new ApiClientConnection(
     new ApiClientOptions()
     {
-        GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
+        GraphQLClientEndpoint = "url",
         Timeout = TimeSpan.FromSeconds(10),
         RetryPolicy = Policy
             .Handle<HttpRequestException>()
