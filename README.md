@@ -1,7 +1,7 @@
 # ApiClient based on HttpClient with GraphQl support for Unity
 
 ## Prerequisites
-Check and install all [DEPENDENCIES](#package_dependencies:) before importing this package to avoid errors.
+Check and install all [DEPENDENCIES](#dependencies) before importing this package to avoid errors.
 
 ## Usage
 Create instance of `ApiClientConnection`
@@ -63,7 +63,7 @@ else
 }
 ```
 
-## Package dependencies:
+## Dependencies
 
 ### NuGetForUnity
 https://github.com/GlitchEnzo/NuGetForUnity
