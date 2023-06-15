@@ -167,18 +167,18 @@ else
 ```
 
 ## Retry policy
-By dafault each request will be sent only once.
+By default each request will be sent only once.
 To specify the exact rules of how the retry policy should
 look like pass custom policy when creating `IApiClientConnection` instance.
 ```csharp
-private static HttpStatusCode[] _httpStatusCodesWorthRetrying = {
+private static HttpStatusCode[] httpStatusCodesWorthRetrying = {
             HttpStatusCode.RequestTimeout, // 408
             HttpStatusCode.InternalServerError, // 500
             HttpStatusCode.BadGateway, // 502
             HttpStatusCode.GatewayTimeout // 504
         };
 
-private readonly IApiClientConnection _apiClientConnecton = new ApiClientConnection(
+private readonly IApiClientConnection apiClientConnecton = new ApiClientConnection(
     new ApiClientOptions()
     {
         GraphQLClientEndpoint = "url",
@@ -190,7 +190,7 @@ private readonly IApiClientConnection _apiClientConnecton = new ApiClientConnect
                 var validStatusCode = false;
                 if (r is IHttpResponseStatusCode responseWithStatusCode)
                 {
-                    validStatusCode = _httpStatusCodesWorthRetrying.Contains(responseWithStatusCode.StatusCode);
+                    validStatusCode = httpStatusCodesWorthRetrying.Contains(responseWithStatusCode.StatusCode);
                 }
                 return r.IsTimeout ||
                     r.IsNetworkError ||
@@ -211,8 +211,8 @@ private readonly IApiClientConnection _apiClientConnecton = new ApiClientConnect
 Authentication can be passed as `AuthenticationHeaderValue` when creating request via
 IApiClientConnection instance.
 ```csharp
-        var authentication = new AuthenticationHeaderValue("Bearer", "Token");
-var request = _apiClientConnecton.CreateGet<T>("url", _cts.Token, authentication: authentication);
+var authentication = new AuthenticationHeaderValue("Bearer", "Token");
+var request = _apiClientConnecton.CreateGet<T>("url", cts.Token, authentication: authentication);
 ```
 
 
