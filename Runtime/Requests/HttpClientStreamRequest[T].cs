@@ -1,0 +1,74 @@
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading;
+using System.Threading.Tasks;
+using ApiClient.Runtime.HttpResponses;
+
+namespace ApiClient.Runtime.Requests
+{
+    public class HttpClientStreamRequest<T> : IHttpRequest
+    {
+        public bool IsSent { get; private set; }
+        public CancellationToken CancellationToken { get; }
+        public HttpRequestMessage RequestMessage { get; private set; }
+        public string RequestId { get; } = Guid.NewGuid().ToString();
+
+        public AuthenticationHeaderValue Authentication
+        {
+            get => _authentication;
+            set
+            {
+                _authentication = value;
+
+                // apply authentication header
+                if (_authentication != null)
+                {
+                    RequestMessage.Headers.Authorization = _authentication;
+                }
+            }
+        }
+
+        public Dictionary<string, string> DefaultHeaders
+        {
+            set
+            {
+                if (value == null)
+                {
+                    return;
+                }
+                
+                foreach (var kv in value)
+                {
+                    RequestMessage.Headers.Add(kv.Key, kv.Value);
+                }
+            }
+        }
+
+
+        private readonly ApiClient _apiClient;
+
+        private AuthenticationHeaderValue _authentication;
+
+
+        public HttpClientStreamRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
+        {
+            RequestMessage = requestMessage;
+            CancellationToken = ct;
+            _apiClient = apiClient;
+        }
+
+        public async Task Send(Action<IHttpResponse> OnStreamResponse)
+        {
+            if (IsSent)
+            {
+                throw new Exception("This request has been already sent! Resending is not allowed.");
+            }
+
+            IsSent = true;
+
+            await _apiClient.SendStreamRequest<T>(this, OnStreamResponse);
+        }
+    }
+}

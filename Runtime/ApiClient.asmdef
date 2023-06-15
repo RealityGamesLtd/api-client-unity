@@ -1,0 +1,23 @@
+{
+    "name": "ApiClient",
+    "rootNamespace": "",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "GraphQL.Client.dll",
+        "GraphQL.Client.Abstractions.dll",
+        "GraphQL.Client.Abstractions.Websocket.dll",
+        "GraphQL.Primitives.dll",
+        "Newtonsoft.Json.dll",
+        "GraphQL.Client.Serializer.Newtonsoft.dll",
+        "GraphQL.Client.Serializer.SystemTextJson.dll",
+        "Polly.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
