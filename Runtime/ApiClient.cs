@@ -253,7 +253,7 @@ namespace ApiClient.Runtime
                                         }
 
                                         int charsRead = await streamReader.ReadAsync(buffer, 0, 4096);
-                                        var readString = new string(buffer);
+                                        var readString = new string(buffer).Substring(0, charsRead);
 
                                         Debug.Log($"Memory<char> len: {readString.Length}, bytes read: {charsRead}");
 
