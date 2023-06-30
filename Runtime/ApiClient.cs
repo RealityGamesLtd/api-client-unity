@@ -99,7 +99,7 @@ namespace ApiClient.Runtime
                         {
                             if (response == null)
                             {
-                                response = new HttpResponse(reqest.RequestMessage.RequestUri, responseMessage.StatusCode);
+                                response = new HttpResponse(reqest.RequestMessage.RequestUri, responseMessage.Headers, responseMessage.StatusCode);
                             }
                         }
                     }
@@ -162,6 +162,7 @@ namespace ApiClient.Runtime
                         using (var responseMessage = await httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken))
                         {
                             var body = await responseMessage.Content.ReadAsStringAsync();
+                            var headers = responseMessage.Headers;
                             T content = default;
 
                             if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
@@ -185,7 +186,7 @@ namespace ApiClient.Runtime
 
                             if (response == null)
                             {
-                                response = new HttpResponse<T>(content, reqest.RequestMessage.RequestUri, responseMessage.StatusCode);
+                                response = new HttpResponse<T>(content, responseMessage.Headers, reqest.RequestMessage.RequestUri, responseMessage.StatusCode);
                             }
                         }
                     }
@@ -289,7 +290,7 @@ namespace ApiClient.Runtime
                                                         OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                                     }
 
-                                                    OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(content, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                    OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(content, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                                 }
                                                 else
                                                 {
@@ -312,7 +313,7 @@ namespace ApiClient.Runtime
                     else
                     {
                         // Handle non 2xx response
-                        OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(default, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                        OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(default, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                     }
                 }
             }
@@ -400,7 +401,7 @@ namespace ApiClient.Runtime
                         if (graphQLResponse.Result.Errors == null)
                         {
                             // valid response
-                            response = new HttpResponse<T>(graphQLResponse.Result.Data, graphQLRequest.Uri, graphQLHttpResponse.StatusCode);
+                            response = new HttpResponse<T>(graphQLResponse.Result.Data, graphQLHttpResponse.ResponseHeaders, graphQLRequest.Uri, graphQLHttpResponse.StatusCode);
                         }
                         else
                         {

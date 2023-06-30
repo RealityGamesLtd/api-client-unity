@@ -1,13 +1,15 @@
 using System;
 using System.Net;
+using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
     public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode
     {
-        public HttpResponse(T content, Uri uri, HttpStatusCode statusCode)
+        public HttpResponse(T content, HttpResponseHeaders headers, Uri uri, HttpStatusCode statusCode)
         {
             Content = content;
+            Headers = headers;
             RequestUri = uri;
             StatusCode = statusCode;
         }
@@ -22,5 +24,6 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsTimeout => false;
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
+        public HttpResponseHeaders Headers { get; private set; }
     }
 }
