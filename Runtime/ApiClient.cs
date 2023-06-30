@@ -63,13 +63,16 @@ namespace ApiClient.Runtime
             // assign custom retry policy
             _retryPolicy = options.RetryPolicy;
 
-            // create options for graphQLClient
-            var graphQLClientOptions = new GraphQLHttpClientOptions()
+            if (Uri.IsWellFormedUriString(options.GraphQLClientEndpoint, UriKind.Absolute))
             {
-                EndPoint = new Uri(options.GraphQLClientEndpoint),
-            };
-            // create graphQLClient using httpClient instance
-            graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), httpClient);
+                // create options for graphQLClient
+                var graphQLClientOptions = new GraphQLHttpClientOptions()
+                {
+                    EndPoint = new Uri(options.GraphQLClientEndpoint),
+                };
+                // create graphQLClient using httpClient instance
+                graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), httpClient);
+            }
         }
 
         /// <summary>
