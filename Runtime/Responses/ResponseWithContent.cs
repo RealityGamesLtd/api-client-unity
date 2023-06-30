@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http.Headers;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime
@@ -23,8 +24,10 @@ namespace ApiClient.Runtime
         public T Content { get; private set; }
         public U ErrorCode { get; private set; }
         public string UserFacingErrorMessage { get; private set; }
+        public HttpResponseHeaders Headers { get; private set; }
 
         public ResponseError<U> Error { get; private set; }
+
 
         public ResponseWithContent()
         {
@@ -40,6 +43,7 @@ namespace ApiClient.Runtime
             IsAborted = httpResponse.IsAborted;
             IsTimeout = httpResponse.IsTimeout;
             RequestUri = httpResponse.RequestUri;
+            Headers = httpResponse.Headers;
         }
 
         public void SetContent(T content)

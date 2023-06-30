@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -11,6 +12,8 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsTimeout => false;
         public bool IsContentParsingError => false;
         public Uri RequestUri { get; private set; }
+        public HttpResponseHeaders Headers { get; private set; } = null;
+
 
         public AbortedHttpResponse(Uri requestUri)
         {

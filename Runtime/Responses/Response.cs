@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http.Headers;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime
@@ -16,6 +17,7 @@ namespace ApiClient.Runtime
         public bool IsTimeout { get; private set; }
         public bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout;
         public Uri RequestUri { get; private set; }
+        public HttpResponseHeaders Headers { get; private set; }
 
 
         public Response()
@@ -32,6 +34,7 @@ namespace ApiClient.Runtime
             IsAborted = httpResponse.IsAborted;
             IsTimeout = httpResponse.IsTimeout;
             RequestUri = httpResponse.RequestUri;
+            Headers = httpResponse.Headers;
         }
     }
 }

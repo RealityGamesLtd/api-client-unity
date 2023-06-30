@@ -175,7 +175,7 @@ namespace ApiClient.Runtime
                                 catch (Exception ex)
                                 {
                                     // if unsuccessfull, return parsing error
-                                    response = new ParsingErrorHttpResponse(ex.ToString(), reqest.RequestMessage.RequestUri);
+                                    response = new ParsingErrorHttpResponse(ex.ToString(), responseMessage.Headers, reqest.RequestMessage.RequestUri);
                                 }
                             }
                             else
@@ -268,7 +268,7 @@ namespace ApiClient.Runtime
                                         }
                                         catch (Exception ex)
                                         {
-                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                         }
 
                                         if (matches != null && matches.Count > 0)
@@ -287,7 +287,7 @@ namespace ApiClient.Runtime
                                                     catch (Exception ex)
                                                     {
                                                         // handle parsing error
-                                                        OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                        OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                                     }
 
                                                     OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(content, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
@@ -295,14 +295,14 @@ namespace ApiClient.Runtime
                                                 else
                                                 {
                                                     // handle invalid string
-                                                    OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse("JSON string is null", request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                    OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse("JSON string is null", responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                                 }
                                             }
                                         }
                                         else
                                         {
                                             // handle invalid string
-                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse($"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'", request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse($"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'", responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
                                         }
                                     }
                                     while (!streamReader.EndOfStream);
@@ -377,7 +377,7 @@ namespace ApiClient.Runtime
                     }
                     catch (JsonException e)
                     {
-                        response = new ParsingErrorHttpResponse(e.Message, graphQLRequest.Uri);
+                        response = new ParsingErrorHttpResponse(e.Message, null, graphQLRequest.Uri);
                     }
                     catch (Exception e)
                     {
@@ -395,7 +395,7 @@ namespace ApiClient.Runtime
                         catch (Exception e)
                         {
                             // handle invalid cast
-                            response = new ParsingErrorHttpResponse(e.Message, graphQLRequest.Uri);
+                            response = new ParsingErrorHttpResponse(e.Message, graphQLHttpResponse.ResponseHeaders, graphQLRequest.Uri);
                         }
 
                         if (graphQLResponse.Result.Errors == null)
