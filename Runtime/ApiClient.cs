@@ -262,7 +262,7 @@ namespace ApiClient.Runtime
                                         Debug.Log($"Memory<char> len: {readString.Length}, bytes read: {charsRead}");
 
                                         // extract json string
-                                        var regexPattern = @"({.*?})";
+                                        var regexPattern = @"({.*})";
                                         MatchCollection matches = null;
                                         try
                                         {
