@@ -25,6 +25,7 @@ namespace ApiClient.Runtime
         public U ErrorCode { get; private set; }
         public string UserFacingErrorMessage { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
+        public HttpContentHeaders ContentHeaders { get; private set; }
 
         public ResponseError<U> Error { get; private set; }
 
@@ -44,6 +45,7 @@ namespace ApiClient.Runtime
             IsTimeout = httpResponse.IsTimeout;
             RequestUri = httpResponse.RequestUri;
             Headers = httpResponse.Headers;
+            ContentHeaders = httpResponse.ContentHeaders;
         }
 
         public void SetContent(T content)

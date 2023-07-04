@@ -43,6 +43,7 @@ namespace ApiClient.Runtime.HttpResponses
 
         Uri RequestUri { get; }
         HttpResponseHeaders Headers { get; }
+        HttpContentHeaders ContentHeaders { get; }
     }
 
     public interface IHttpResponseStatusCode
@@ -51,5 +52,13 @@ namespace ApiClient.Runtime.HttpResponses
         /// Response status code
         /// </summary>
         HttpStatusCode StatusCode { get; }
+    }
+
+    public interface IHttpResponseBody
+    {
+        /// <summary>
+        /// Response body
+        /// </summary>
+        string Body { get; }
     }
 }

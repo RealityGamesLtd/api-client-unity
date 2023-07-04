@@ -13,6 +13,7 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsContentParsingError => false;
         public Uri RequestUri { get; private set; }
         public HttpResponseHeaders Headers { get; private set; } = null;
+        public HttpContentHeaders ContentHeaders { get; private set; } = null;
 
         public string Message { get; }
 

@@ -19,6 +19,7 @@ namespace ApiClient.Runtime
         public bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout && Error == null;
         public Uri RequestUri { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
+        public HttpContentHeaders ContentHeaders { get; private set; }
 
         public ResponseError<T> Error { get; private set; }
 
@@ -37,6 +38,7 @@ namespace ApiClient.Runtime
             IsTimeout = httpResponse.IsTimeout;
             RequestUri = httpResponse.RequestUri;
             Headers = httpResponse.Headers;
+            ContentHeaders = httpResponse.ContentHeaders;
         }
 
         public void SetError(T errorCode)
