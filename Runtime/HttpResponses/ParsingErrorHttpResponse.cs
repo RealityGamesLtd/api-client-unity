@@ -4,7 +4,7 @@ using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
-    public class ParsingErrorHttpResponse : IHttpResponse, IHttpResponseStatusCode
+    public class ParsingErrorHttpResponse : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
     {
         public bool IsClientError => false;
         public bool IsServerError => false;
@@ -15,16 +15,19 @@ namespace ApiClient.Runtime.HttpResponses
         public Uri RequestUri { get; private set; }
         public string Message { get; }
         public HttpResponseHeaders Headers { get; private set; }
-
-
+        public HttpContentHeaders ContentHeaders { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
+        public string Body { get; private set; }
 
-        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri, HttpStatusCode statusCode)
+
+        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
         {
             Message = errorMessage;
             Headers = headers;
             RequestUri = requestUri;
             StatusCode = statusCode;
+            ContentHeaders = contentHeaders;
+            Body = body;
         }
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri)

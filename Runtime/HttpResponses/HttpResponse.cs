@@ -6,11 +6,12 @@ namespace ApiClient.Runtime.HttpResponses
 {
     public class HttpResponse : IHttpResponse, IHttpResponseStatusCode
     {
-        public HttpResponse(Uri uri, HttpResponseHeaders headers, HttpStatusCode statusCode)
+        public HttpResponse(Uri uri, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, HttpStatusCode statusCode)
         {
             RequestUri = uri;
             StatusCode = statusCode;
             Headers = headers;
+            ContentHeaders = contentHeaders;
         }
 
         public bool IsClientError => (int)StatusCode >= 400 && (int)StatusCode < 500;
@@ -22,5 +23,6 @@ namespace ApiClient.Runtime.HttpResponses
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
+        public HttpContentHeaders ContentHeaders { get; private set; }
     }
 }

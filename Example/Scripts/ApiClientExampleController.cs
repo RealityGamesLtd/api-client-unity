@@ -5,11 +5,6 @@ using UnityEngine;
 using TMPro;
 using ApiClient.Runtime.HttpResponses;
 using ApiClient.Runtime.GraphQLBuilder;
-using System;
-using Polly;
-using System.Net.Http;
-using System.Net;
-using System.Linq;
 using System.Text;
 
 namespace ApiClientExample

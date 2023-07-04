@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -39,6 +37,7 @@ namespace ApiClientExample
             {
                 GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
                 Timeout = TimeSpan.FromSeconds(10),
+                Middleware = new Middleware(),
                 RetryPolicy = Policy
                     .Handle<HttpRequestException>()
                     .OrResult<IHttpResponse>(r =>

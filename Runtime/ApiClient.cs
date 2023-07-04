@@ -17,27 +17,10 @@ namespace ApiClient.Runtime
 {
     public class ApiClient
     {
-        /// <summary>
-        /// Called before sending a request. Backoff included
-        /// </summary>
-        public event Action<IHttpRequest> OnWillSendRequestWithBackoff;
-        /// <summary>
-        /// Called on single request within backoff
-        /// </summary>
-        public event Action<RequestInfo> OnRequest;
-        /// <summary>
-        /// Called on single response within backoff
-        /// </summary>
-        public event Action<ResponseInfo> OnResponse;
-        /// <summary>
-        /// Called after recieving a response. Backoff included
-        /// </summary>
-        public event Action<IHttpResponse> OnResponseReceivedWithBackoff;
-
-
-        private readonly GraphQLHttpClient graphQLClient;
-        private readonly System.Net.Http.HttpClient httpClient;
-
+        private readonly GraphQLHttpClient _graphQLClient;
+        private readonly System.Net.Http.HttpClient _httpClient;
+        private readonly IApiClientMiddleware _middleware;
+        private readonly int _streamBufferSize = 4096;
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
@@ -55,13 +38,19 @@ namespace ApiClient.Runtime
         public ApiClient(ApiClientOptions options)
         {
             // create http client instance
-            httpClient = new HttpClient()
+            _httpClient = new HttpClient()
             {
                 Timeout = options.Timeout
             };
 
+            // assign middleware
+            _middleware = options.Middleware;
+
             // assign custom retry policy
             _retryPolicy = options.RetryPolicy;
+
+            // assign stream buffer size
+            _streamBufferSize = options.StreamBufferSize;
 
             if (Uri.IsWellFormedUriString(options.GraphQLClientEndpoint, UriKind.Absolute))
             {
@@ -71,7 +60,7 @@ namespace ApiClient.Runtime
                     EndPoint = new Uri(options.GraphQLClientEndpoint),
                 };
                 // create graphQLClient using httpClient instance
-                graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), httpClient);
+                _graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), _httpClient);
             }
         }
 
@@ -79,10 +68,13 @@ namespace ApiClient.Runtime
         /// Make http request using HttpCLient with no body processing.
         /// </summary>
         /// <param name="req">Request to make<</param>
-        /// <returns><see cref="HttpResponse"/> or <see cref="AbortedHttpResponse"/> or <see cref="TimeoutHttpResponse"/> or <see cref="NetworkErrorHttpResponse"/>.</returns>
+        /// <returns><see cref="HttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest(HttpClientRequest req)
         {
-            OnWillSendRequestWithBackoff?.Invoke(req);
+            await _middleware.ProcessRequest(req, true);
 
             IHttpResponse response = null;
 
@@ -92,17 +84,23 @@ namespace ApiClient.Runtime
                 {
                     response = null;
 
-                    var reqest = req.RecreateWithHttpRequestMessage();
+                    // if the request has been sent already we must recreate it as it's not
+                    // posible to send the same request message multiple times
+                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    OnRequest?.Invoke(new RequestInfo(reqest.RequestId, reqest));
+                    await _middleware.ProcessRequest(req, false);
 
                     try
                     {
-                        using (var responseMessage = await httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken))
+                        using (var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken))
                         {
                             if (response == null)
                             {
-                                response = new HttpResponse(reqest.RequestMessage.RequestUri, responseMessage.Headers, responseMessage.StatusCode);
+                                response = new HttpResponse(
+                                    reqest.RequestMessage.RequestUri,
+                                    responseMessage.Headers,
+                                    responseMessage.Content.Headers,
+                                    responseMessage.StatusCode);
                             }
                         }
                     }
@@ -122,18 +120,15 @@ namespace ApiClient.Runtime
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
                     }
 
-                    OnResponse?.Invoke(new ResponseInfo(reqest.RequestId, response));
-                    return response;
-                }, new Dictionary<string, object>() { { "httpClient", httpClient } }, req.CancellationToken, true);
+                    return await _middleware.ProcessResponse(response, reqest.RequestId, false); ;
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
                 response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
             }
 
-            OnResponseReceivedWithBackoff?.Invoke(response);
-
-            return response;
+            return await _middleware.ProcessResponse(response, req.RequestId, true);
         }
 
         /// <summary>
@@ -143,10 +138,14 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <typeparam name="T">Response content type</typeparam>
         /// <param name="req">Request to make<</param>
-        /// <returns><see cref="HttpResponse"/> or <see cref="ParsingErrorHttpResponse"/> or <see cref="AbortedHttpResponse"/> or <see cref="TimeoutHttpResponse"/> or <see cref="NetworkErrorHttpResponse"/>.</returns>
+        /// <returns><see cref="HttpResponse"/> or 
+        /// <see cref="ParsingErrorHttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<T>(HttpClientRequest<T> req)
         {
-            OnWillSendRequestWithBackoff?.Invoke(req);
+            await _middleware.ProcessRequest(req, true);
 
             IHttpResponse response = null;
 
@@ -156,13 +155,15 @@ namespace ApiClient.Runtime
                 {
                     response = null;
 
-                    var reqest = req.RecreateWithHttpRequestMessage();
+                    // if the request has been sent already we must recreate it as it's not
+                    // posible to send the same request message multiple times
+                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    OnRequest?.Invoke(new RequestInfo(reqest.RequestId, reqest));
+                    await _middleware.ProcessRequest(req, false);
 
                     try
                     {
-                        using (var responseMessage = await httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken))
+                        using (var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken))
                         {
                             var body = await responseMessage.Content.ReadAsStringAsync();
                             var headers = responseMessage.Headers;
@@ -178,7 +179,13 @@ namespace ApiClient.Runtime
                                 catch (Exception ex)
                                 {
                                     // if unsuccessfull, return parsing error
-                                    response = new ParsingErrorHttpResponse(ex.ToString(), responseMessage.Headers, reqest.RequestMessage.RequestUri);
+                                    response = new ParsingErrorHttpResponse(
+                                        ex.ToString(),
+                                        responseMessage.Headers,
+                                        responseMessage.Content.Headers,
+                                        body,
+                                        reqest.RequestMessage.RequestUri,
+                                        responseMessage.StatusCode);
                                 }
                             }
                             else
@@ -189,7 +196,13 @@ namespace ApiClient.Runtime
 
                             if (response == null)
                             {
-                                response = new HttpResponse<T>(content, responseMessage.Headers, reqest.RequestMessage.RequestUri, responseMessage.StatusCode);
+                                response = new HttpResponse<T>(
+                                    content,
+                                    responseMessage.Headers,
+                                    responseMessage.Content.Headers,
+                                    body,
+                                    reqest.RequestMessage.RequestUri,
+                                    responseMessage.StatusCode);
                             }
                         }
                     }
@@ -209,18 +222,15 @@ namespace ApiClient.Runtime
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
                     }
 
-                    OnResponse?.Invoke(new ResponseInfo(reqest.RequestId, response));
-                    return response;
-                }, new Dictionary<string, object>() { { "httpClient", httpClient } }, req.CancellationToken, true);
+                    return await _middleware.ProcessResponse(response, reqest.RequestId, false);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
                 response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
             }
 
-            OnResponseReceivedWithBackoff?.Invoke(response);
-
-            return response;
+            return await _middleware.ProcessResponse(response, req.RequestId, true);
         }
 
         /// <summary>
@@ -229,13 +239,18 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <typeparam name="T">Response content type</typeparam>
         /// <param name="request">Request to make</param>
-        /// <param name="OnStreamResponse">Callback action to retrieve responses of: <see cref="HttpResponse"/> or <see cref="ParsingErrorHttpResponse"/> or <see cref="AbortedHttpResponse"/> or <see cref="TimeoutHttpResponse"/> or <see cref="NetworkErrorHttpResponse"/></param>
+        /// <param name="OnStreamResponse">Callback action to retrieve responses of: <see cref="HttpResponse"/> or 
+        /// <see cref="ParsingErrorHttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/></param>
         /// <returns>Request Task</returns>
         public async Task SendStreamRequest<T>(HttpClientStreamRequest<T> request, Action<IHttpResponse> OnStreamResponse)
         {
             try
             {
-                using (var responseMessage = await httpClient.SendAsync(request.RequestMessage, HttpCompletionOption.ResponseHeadersRead, request.CancellationToken))
+                await _middleware.ProcessRequest(request, true);
+                using (var responseMessage = await _httpClient.SendAsync(request.RequestMessage, HttpCompletionOption.ResponseHeadersRead, request.CancellationToken))
                 {
                     // read a stream only when 200 status code was returned
                     if (responseMessage.IsSuccessStatusCode)
@@ -247,7 +262,7 @@ namespace ApiClient.Runtime
                                 // run on non UI thread
                                 await Task.Run(async () =>
                                 {
-                                    char[] buffer = new char[4096];
+                                    char[] buffer = new char[_streamBufferSize];
 
                                     do
                                     {
@@ -256,10 +271,11 @@ namespace ApiClient.Runtime
                                             throw new TaskCanceledException();
                                         }
 
-                                        int charsRead = await streamReader.ReadAsync(buffer, 0, 4096);
+                                        int charsRead = await streamReader.ReadAsync(buffer, 0, _streamBufferSize);
                                         var readString = new string(buffer).Substring(0, charsRead);
 
-                                        Debug.Log($"Memory<char> len: {readString.Length}, bytes read: {charsRead}");
+                                        // update content length
+                                        responseMessage.Content.Headers.ContentLength = readString.Length;
 
                                         // extract json string
                                         var regexPattern = @"({.*})";
@@ -271,7 +287,16 @@ namespace ApiClient.Runtime
                                         }
                                         catch (Exception ex)
                                         {
-                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                            OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                                new ParsingErrorHttpResponse(
+                                                    ex.Message,
+                                                    responseMessage.Headers,
+                                                    responseMessage.Content.Headers,
+                                                    readString,
+                                                    request.RequestMessage.RequestUri,
+                                                    responseMessage.StatusCode),
+                                                request.RequestId,
+                                                false));
                                         }
 
                                         if (matches != null && matches.Count > 0)
@@ -290,22 +315,59 @@ namespace ApiClient.Runtime
                                                     catch (Exception ex)
                                                     {
                                                         // handle parsing error
-                                                        OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse(ex.Message, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                        OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                                            new ParsingErrorHttpResponse(
+                                                                ex.Message,
+                                                                responseMessage.Headers,
+                                                                responseMessage.Content.Headers,
+                                                                readString,
+                                                                request.RequestMessage.RequestUri,
+                                                                responseMessage.StatusCode),
+                                                            request.RequestId,
+                                                            false));
                                                     }
 
-                                                    OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(content, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                                        new HttpResponse<T>(
+                                                            content,
+                                                            responseMessage.Headers,
+                                                            responseMessage.Content?.Headers,
+                                                            jsonString,
+                                                            request.RequestMessage.RequestUri,
+                                                            responseMessage.StatusCode),
+                                                        request.RequestId,
+                                                        false));
                                                 }
                                                 else
                                                 {
                                                     // handle invalid string
-                                                    OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse("JSON string is null", responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                                        new ParsingErrorHttpResponse(
+                                                            "JSON string is null",
+                                                            responseMessage.Headers,
+                                                            responseMessage.Content.Headers,
+                                                            readString,
+                                                            request.RequestMessage.RequestUri,
+                                                            responseMessage.StatusCode),
+                                                        request.RequestId,
+                                                        false));
                                                 }
                                             }
                                         }
                                         else
                                         {
                                             // handle invalid string
-                                            OnStreamResponse?.InvokeOnMainThread(new ParsingErrorHttpResponse($"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'", responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                                            OnStreamResponse?.InvokeOnMainThread(
+                                                await _middleware.ProcessResponse(
+                                                    new ParsingErrorHttpResponse(
+                                                        $"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'",
+                                                        responseMessage.Headers,
+                                                        responseMessage.Content.Headers,
+                                                        readString,
+                                                        request.RequestMessage.RequestUri,
+                                                        responseMessage.StatusCode),
+                                                    request.RequestId,
+                                                    false));
                                         }
                                     }
                                     while (!streamReader.EndOfStream);
@@ -316,7 +378,13 @@ namespace ApiClient.Runtime
                     else
                     {
                         // Handle non 2xx response
-                        OnStreamResponse?.InvokeOnMainThread(new HttpResponse<T>(default, responseMessage.Headers, request.RequestMessage.RequestUri, responseMessage.StatusCode));
+                        OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(new HttpResponse<T>(
+                            default,
+                            responseMessage.Headers,
+                            null,
+                            null,
+                            request.RequestMessage.RequestUri,
+                            responseMessage.StatusCode), request.RequestId, true));
                     }
                 }
             }
@@ -325,18 +393,27 @@ namespace ApiClient.Runtime
                 if (request.CancellationToken.IsCancellationRequested)
                 {
                     // Task was aborted
-                    OnStreamResponse?.InvokeOnMainThread(new AbortedHttpResponse(request.RequestMessage.RequestUri));
+                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                        new AbortedHttpResponse(request.RequestMessage.RequestUri),
+                        request.RequestId,
+                        true));
                 }
                 else
                 {
                     // timeout
-                    OnStreamResponse?.InvokeOnMainThread(new TimeoutHttpResponse(request.RequestMessage.RequestUri));
+                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                        new TimeoutHttpResponse(request.RequestMessage.RequestUri),
+                        request.RequestId,
+                        true));
                 }
             }
             catch (Exception e)
             {
                 // other exception
-                OnStreamResponse?.InvokeOnMainThread(new NetworkErrorHttpResponse(e.Message, request.RequestMessage.RequestUri));
+                OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                    new NetworkErrorHttpResponse(e.Message, request.RequestMessage.RequestUri),
+                    request.RequestId,
+                    true));
             }
         }
 
@@ -345,10 +422,14 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <typeparam name="T">Response content type</typeparam>
         /// <param name="graphQLRequest">Request to make</param>
-        /// <returns><see cref="HttpResponse"/> or <see cref="ParsingErrorHttpResponse"/> or <see cref="AbortedHttpResponse"/> or <see cref="TimeoutHttpResponse"/> or <see cref="NetworkErrorHttpResponse"/>.</returns>
+        /// <returns><see cref="HttpResponse"/> or 
+        /// <see cref="ParsingErrorHttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendGraphQLRequest<T>(GraphQLClientRequest<T> graphQLRequest)
         {
-            OnWillSendRequestWithBackoff?.Invoke(graphQLRequest);
+            await _middleware.ProcessRequest(graphQLRequest, true);
 
             IHttpResponse response = null;
 
@@ -356,10 +437,9 @@ namespace ApiClient.Runtime
             {
                 await _retryPolicy.ExecuteAsync(async (c, ct) =>
                 {
+                    await _middleware.ProcessRequest(graphQLRequest, false);
 
-                    OnRequest?.Invoke(new RequestInfo(graphQLRequest.RequestId, graphQLRequest));
-
-                    var graphQLResponse = graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
+                    var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
 
                     try
                     {
@@ -401,10 +481,16 @@ namespace ApiClient.Runtime
                             response = new ParsingErrorHttpResponse(e.Message, graphQLHttpResponse.ResponseHeaders, graphQLRequest.Uri);
                         }
 
-                        if (graphQLResponse.Result.Errors == null)
+                        if (response == null && graphQLResponse.Result.Errors == null)
                         {
                             // valid response
-                            response = new HttpResponse<T>(graphQLResponse.Result.Data, graphQLHttpResponse.ResponseHeaders, graphQLRequest.Uri, graphQLHttpResponse.StatusCode);
+                            response = new HttpResponse<T>(
+                                graphQLResponse.Result.Data,
+                                graphQLHttpResponse.ResponseHeaders,
+                                null,
+                                null,
+                                graphQLRequest.Uri,
+                                graphQLHttpResponse.StatusCode);
                         }
                         else
                         {
@@ -419,20 +505,16 @@ namespace ApiClient.Runtime
                         response = new NetworkErrorHttpResponse("No valid result in graphQLResponse", graphQLRequest.Uri);
                     }
 
-                    OnResponse?.Invoke(new ResponseInfo(graphQLRequest.RequestId, response));
+                    return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
 
-                    return response;
-
-                }, new Dictionary<string, object>() { { "httpClient", httpClient } }, graphQLRequest.CancellationToken, true);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, graphQLRequest.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
                 response = new AbortedHttpResponse(graphQLRequest.Uri);
             }
 
-            OnResponseReceivedWithBackoff?.Invoke(response);
-
-            return response;
+            return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, true);
         }
     }
 }

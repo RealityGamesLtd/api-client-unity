@@ -4,14 +4,16 @@ using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
-    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode
+    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
     {
-        public HttpResponse(T content, HttpResponseHeaders headers, Uri uri, HttpStatusCode statusCode)
+        public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
         {
             Content = content;
             Headers = headers;
             RequestUri = uri;
             StatusCode = statusCode;
+            ContentHeaders = contentHeaders;
+            Body = body;
         }
 
         public T Content { get; }
@@ -25,5 +27,7 @@ namespace ApiClient.Runtime.HttpResponses
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
+        public HttpContentHeaders ContentHeaders { get; private set; }
+        public string Body { get; private set; }
     }
 }
