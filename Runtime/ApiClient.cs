@@ -11,7 +11,6 @@ using Polly;
 using Polly.Retry;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
-using UnityEngine;
 
 namespace ApiClient.Runtime
 {
@@ -44,7 +43,7 @@ namespace ApiClient.Runtime
             };
 
             // assign middleware
-            _middleware = options.Middleware;
+            _middleware = options.Middleware != null ? options.Middleware : new DefaultApiClientMiddleware();
 
             // assign custom retry policy
             _retryPolicy = options.RetryPolicy;
@@ -515,6 +514,25 @@ namespace ApiClient.Runtime
             }
 
             return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, true);
+        }
+
+        /// <summary>
+        /// Default middleware
+        /// </summary>
+
+        public class DefaultApiClientMiddleware : IApiClientMiddleware
+        {
+            #pragma warning disable CS1998 // allow to run synchronusly
+            public async Task ProcessRequest(IHttpRequest request, bool isResponseWithBackoff = false)
+            {
+
+            }
+
+            public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool isResponseWithBackoff = false)
+            {
+                return response;
+            }
+            #pragma warning restore CS1998 // allow to run synchronusly
         }
     }
 }
