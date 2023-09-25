@@ -130,7 +130,101 @@ namespace ApiClient.Runtime
         /// response body will be deserialized. If deserialization is inpossible it will return
         /// <see cref="ParsingErrorHttpResponse"/>.
         /// </summary>
+        /// <typeparam name="T">Response error type</typeparam>
+        /// <param name="req">Request to make<</param>
+        /// <returns><see cref="HttpResponse"/> or 
+        /// <see cref="ParsingErrorHttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
+        public async Task<IHttpResponse> SendHttpRequest<T>(HttpClientRequest<T> req)
+        {
+            await _middleware.ProcessRequest(req, true);
+
+            IHttpResponse response = null;
+
+            try
+            {
+                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                {
+                    response = null;
+
+                    // if the request has been sent already we must recreate it as it's not
+                    // posible to send the same request message multiple times
+                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+
+                    await _middleware.ProcessRequest(reqest, false);
+
+                    try
+                    {
+                        using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
+                        var body = await responseMessage.Content.ReadAsStringAsync();
+                        var headers = responseMessage.Headers;
+                        T content = default;
+
+                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
+                        {
+                            // try parsing content with provided content type
+                            try
+                            {
+                                content = JsonConvert.DeserializeObject<T>(body);
+                            }
+                            catch (Exception ex)
+                            {
+                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // return parsing error from content parsing so we can process it later
+                                response = new ParsingErrorHttpResponse(
+                                    ex.ToString(),
+                                    responseMessage.Headers,
+                                    responseMessage.Content.Headers,
+                                    body,
+                                    reqest.RequestMessage.RequestUri,
+                                    responseMessage.StatusCode);
+                            }
+                        }
+
+                        response ??= new HttpResponse<T>(
+                                content,
+                                responseMessage.Headers,
+                                responseMessage.Content.Headers,
+                                body,
+                                reqest.RequestMessage.RequestUri,
+                                responseMessage.StatusCode);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        if (reqest.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(reqest.RequestMessage.RequestUri);
+                        else
+                            response = new TimeoutHttpResponse(reqest.RequestMessage.RequestUri);
+                    }
+                    catch (Exception ex)
+                    {
+                        string message = "";
+                        if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
+                        message += ex.Message;
+
+                        response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
+                    }
+
+                    return await _middleware.ProcessResponse(response, reqest.RequestId, false);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+            }
+            catch (OperationCanceledException)
+            {
+                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
+            }
+
+            return await _middleware.ProcessResponse(response, req.RequestId, true);
+        }
+
+        /// <summary>
+        /// Make http request using HttpCLient with a specified response type to which the 
+        /// response body will be deserialized. If deserialization is inpossible it will return
+        /// <see cref="ParsingErrorHttpResponse"/>.
+        /// </summary>
         /// <typeparam name="T">Response content type</typeparam>
+        /// <typeparam name="E">Response error type</typeparam>
         /// <param name="req">Request to make<</param>
         /// <returns><see cref="HttpResponse"/> or 
         /// <see cref="ParsingErrorHttpResponse"/> or 
