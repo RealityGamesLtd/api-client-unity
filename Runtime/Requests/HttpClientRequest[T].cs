@@ -13,7 +13,7 @@ namespace ApiClient.Runtime.Requests
         public bool IsSent { get; private set; }
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
-        public string RequestId { get; } = Guid.NewGuid().ToString();
+        public string RequestId { get; private set; } = Guid.NewGuid().ToString();
 
         public AuthenticationHeaderValue Authentication
         {
@@ -74,6 +74,7 @@ namespace ApiClient.Runtime.Requests
             var recreatedHttpRequestMessage = new HttpClientRequest<T>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
             {
                 Authentication = this.Authentication,
+                RequestId = Guid.NewGuid().ToString()
             };
 
             return recreatedHttpRequestMessage;
