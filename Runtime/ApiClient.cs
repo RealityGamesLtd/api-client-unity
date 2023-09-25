@@ -87,7 +87,7 @@ namespace ApiClient.Runtime
                     // posible to send the same request message multiple times
                     var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(req, false);
+                    await _middleware.ProcessRequest(reqest, false);
 
                     try
                     {
@@ -158,7 +158,7 @@ namespace ApiClient.Runtime
                     // posible to send the same request message multiple times
                     var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(req, false);
+                    await _middleware.ProcessRequest(reqest, false);
 
                     try
                     {
