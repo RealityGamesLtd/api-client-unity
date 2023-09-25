@@ -22,7 +22,6 @@ namespace ApiClient.Runtime
         public bool IsFromCache { get; set; }
 
         public T Content { get; private set; }
-        public U ErrorCode { get; private set; }
         public string UserFacingErrorMessage { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
         public HttpContentHeaders ContentHeaders { get; private set; }

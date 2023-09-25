@@ -51,13 +51,13 @@ namespace ApiClientExample
             responseView.SetActive(true);
             responseText.text = "";
 
-            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, LrtResponse<AnonRegisterResponse>>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
             var httpResponse = await request.Send();
             var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);
 
             if (httpResponse.HasNoErrors)
             {
-                var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>>;
+                var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>, LrtResponse<AnonRegisterResponse>>;
                 Debug.Log(responseContent.Content.response.playerId);
                 responseText.text = responseContent.Content.response.playerId;
             }

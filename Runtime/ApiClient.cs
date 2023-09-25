@@ -137,7 +137,7 @@ namespace ApiClient.Runtime
         /// <see cref="AbortedHttpResponse"/> or 
         /// <see cref="TimeoutHttpResponse"/> or 
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
-        public async Task<IHttpResponse> SendHttpRequest<T>(HttpClientRequest<T> req)
+        public async Task<IHttpResponse> SendHttpRequest<T, E>(HttpClientRequest<T, E> req)
         {
             await _middleware.ProcessRequest(req, true);
 
@@ -161,29 +161,40 @@ namespace ApiClient.Runtime
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         var headers = responseMessage.Headers;
                         T content = default;
+                        E error = default;
 
                         if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
                         {
-                            // try parsing content with provided type
+                            // try parsing content with provided content type
                             try
                             {
                                 content = JsonConvert.DeserializeObject<T>(body);
                             }
                             catch (Exception ex)
                             {
-                                // if unsuccessfull, return parsing error
-                                response = new ParsingErrorHttpResponse(
-                                    ex.ToString(),
-                                    responseMessage.Headers,
-                                    responseMessage.Content.Headers,
-                                    body,
-                                    reqest.RequestMessage.RequestUri,
-                                    responseMessage.StatusCode);
+                                // try parsing content with provided error type
+                                try
+                                {
+                                    error = JsonConvert.DeserializeObject<E>(body);
+                                }
+                                catch (Exception) // do nothing with this exception
+                                {
+                                    // if unsuccessfull it's not an error and content parsing failed, 
+                                    // return parsing error from content parsing so we can process it later
+                                    response = new ParsingErrorHttpResponse(
+                                        ex.ToString(),
+                                        responseMessage.Headers,
+                                        responseMessage.Content.Headers,
+                                        body,
+                                        reqest.RequestMessage.RequestUri,
+                                        responseMessage.StatusCode);
+                                }
                             }
                         }
 
-                        response ??= new HttpResponse<T>(
+                        response ??= new HttpResponse<T, E>(
                                 content,
+                                error,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 body,
@@ -503,7 +514,7 @@ namespace ApiClient.Runtime
 
         public class DefaultApiClientMiddleware : IApiClientMiddleware
         {
-            #pragma warning disable CS1998 // allow to run synchronusly
+#pragma warning disable CS1998 // allow to run synchronusly
             public async Task ProcessRequest(IHttpRequest request, bool isResponseWithBackoff = false)
             {
 
@@ -513,7 +524,7 @@ namespace ApiClient.Runtime
             {
                 return response;
             }
-            #pragma warning restore CS1998 // allow to run synchronusly
+#pragma warning restore CS1998 // allow to run synchronusly
         }
     }
 }
