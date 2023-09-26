@@ -14,6 +14,7 @@ namespace ApiClient.Runtime.Requests
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
         public string RequestId { get; } = Guid.NewGuid().ToString();
+        public Uri Uri { get; private set; }
 
         public AuthenticationHeaderValue Authentication
         {
@@ -56,6 +57,7 @@ namespace ApiClient.Runtime.Requests
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
+            Uri = requestMessage.RequestUri;
             _apiClient = apiClient;
         }
 
