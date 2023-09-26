@@ -23,6 +23,7 @@ namespace ApiClient.Runtime.Requests
         public Uri Uri { get; private set; }
         public bool IsSent { get; private set; }
         public string RequestId { get; } = Guid.NewGuid().ToString();
+        public HttpRequestMessage RequestMessage { get; private set; }
 
         public Dictionary<string, string> DefaultHeaders { private get; set; }
 
@@ -42,6 +43,7 @@ namespace ApiClient.Runtime.Requests
             }
 
             Uri = r.RequestUri;
+            RequestMessage = r;
 
             return r;
         }
