@@ -11,6 +11,7 @@ using Polly;
 using Polly.Retry;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
+using UnityEngine.AI;
 
 namespace ApiClient.Runtime
 {
@@ -266,22 +267,29 @@ namespace ApiClient.Runtime
                             }
                             catch (Exception ex)
                             {
+                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // return parsing error from content parsing so we can process it later
+                                response = new ParsingErrorHttpResponse(
+                                    ex.ToString(),
+                                    responseMessage.Headers,
+                                    responseMessage.Content.Headers,
+                                    body,
+                                    reqest.RequestMessage.RequestUri,
+                                    responseMessage.StatusCode);
+                            }
+
+                            // if parsing content was unsuccessful then try to parse it as error
+                            if (content == null)
+                            {
                                 // try parsing content with provided error type
                                 try
                                 {
                                     error = JsonConvert.DeserializeObject<E>(body);
                                 }
-                                catch (Exception) // do nothing with this exception
+                                catch (Exception) 
                                 {
-                                    // if unsuccessfull it's not an error and content parsing failed, 
-                                    // return parsing error from content parsing so we can process it later
-                                    response = new ParsingErrorHttpResponse(
-                                        ex.ToString(),
-                                        responseMessage.Headers,
-                                        responseMessage.Content.Headers,
-                                        body,
-                                        reqest.RequestMessage.RequestUri,
-                                        responseMessage.StatusCode);
+                                    // do nothing with this exception as we don't want to propagate an error
+                                    // of parsing error response
                                 }
                             }
                         }
