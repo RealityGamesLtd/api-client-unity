@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -286,7 +287,7 @@ namespace ApiClient.Runtime
                                 {
                                     error = JsonConvert.DeserializeObject<E>(body);
                                 }
-                                catch (Exception) 
+                                catch (Exception)
                                 {
                                     // do nothing with this exception as we don't want to propagate an error
                                     // of parsing error response
@@ -347,7 +348,12 @@ namespace ApiClient.Runtime
             try
             {
                 await _middleware.ProcessRequest(request, true);
-                using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, HttpCompletionOption.ResponseHeadersRead, request.CancellationToken);
+
+                using var responseMessage = await _httpClient.SendAsync(
+                    request.RequestMessage,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    request.CancellationToken);
+
                 // read a stream only when 200 status code was returned
                 if (responseMessage.IsSuccessStatusCode)
                 {
@@ -366,8 +372,8 @@ namespace ApiClient.Runtime
                                     throw new TaskCanceledException();
                                 }
 
-                                int charsRead = await streamReader.ReadAsync(buffer, 0, _streamBufferSize);
-                                var readString = new string(buffer).Substring(0, charsRead);
+                                int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
+                                var readString = new string(buffer)[..charsRead];
 
                                 // update content length
                                 responseMessage.Content.Headers.ContentLength = readString.Length;
@@ -398,6 +404,11 @@ namespace ApiClient.Runtime
                                 {
                                     for (int i = 0; i < matches.Count; i++)
                                     {
+                                        if (request.CancellationToken.IsCancellationRequested)
+                                        {
+                                            throw new TaskCanceledException();
+                                        }
+
                                         var jsonString = matches[i].Value;
 
                                         if (!string.IsNullOrEmpty(jsonString))
@@ -465,8 +476,8 @@ namespace ApiClient.Runtime
                                             false));
                                 }
                             }
-                            while (!streamReader.EndOfStream);
-                        }, request.CancellationToken);
+                            while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
+                        }, request.CancellationToken).ContinueWith(c => { }, request.CancellationToken);
                     };
                 }
                 else
