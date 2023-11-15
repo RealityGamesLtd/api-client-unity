@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2023-11-15
+### Improvement
+- Combining stream messages when received in chunks
+
 ## [1.0.3] - 2023-06-15
 ### Improvement
 - Stream cancelling in editor when loosing focus or while exiting play mode has been improved
