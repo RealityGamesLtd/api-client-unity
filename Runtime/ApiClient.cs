@@ -364,7 +364,8 @@ namespace ApiClient.Runtime
                         await Task.Run(async () =>
                         {
                             char[] buffer = new char[_streamBufferSize];
-
+                            string partialMessage = "";
+                            
                             do
                             {
                                 if (request.CancellationToken.IsCancellationRequested)
@@ -374,6 +375,23 @@ namespace ApiClient.Runtime
 
                                 int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
                                 var readString = new string(buffer)[..charsRead];
+
+                               /*
+                                    On some platform the message might be returned in chunks. 
+                                    "0A 0A" -> "\n\n" ending characters mean that we've got full message.
+                                    "0D 0A" -> "\r\n" means that we haven't
+                                    As a workaround check for those endings and combine full message from them.
+                                */
+                                if (readString.EndsWith("\n\n") == false)
+                                {
+                                    partialMessage += readString;
+                                    continue;
+                                }
+                                else
+                                {
+                                    readString = partialMessage + readString;
+                                    partialMessage = "";
+                                }
 
                                 // update content length
                                 responseMessage.Content.Headers.ContentLength = readString.Length;
