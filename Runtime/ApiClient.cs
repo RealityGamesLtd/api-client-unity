@@ -355,6 +355,8 @@ namespace ApiClient.Runtime
             {
                 await _middleware.ProcessRequest(request, true);
 
+                request.RequestMessage.Version = new Version(2, 0);
+
                 using var responseMessage = await _httpClient.SendAsync(
                     request.RequestMessage,
                     HttpCompletionOption.ResponseHeadersRead,
