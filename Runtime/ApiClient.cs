@@ -247,13 +247,13 @@ namespace ApiClient.Runtime
 
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
-                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(reqest, false);
+                    await _middleware.ProcessRequest(request, false);
 
                     try
                     {
-                        using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
+                        using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         var headers = responseMessage.Headers;
                         T content = default;
@@ -275,7 +275,7 @@ namespace ApiClient.Runtime
                                     responseMessage.Headers,
                                     responseMessage.Content.Headers,
                                     body,
-                                    reqest.RequestMessage.RequestUri,
+                                    request.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
                             }
 
@@ -307,15 +307,15 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 body,
-                                reqest.RequestMessage.RequestUri,
+                                request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
                     {
-                        if (reqest.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(reqest.RequestMessage.RequestUri);
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(reqest.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
                     }
                     catch (Exception ex)
                     {
@@ -323,10 +323,10 @@ namespace ApiClient.Runtime
                         if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
                         message += ex.Message;
 
-                        response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
 
-                    return await _middleware.ProcessResponse(response, reqest.RequestId, false);
+                    return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -355,8 +355,6 @@ namespace ApiClient.Runtime
             {
                 await _middleware.ProcessRequest(request, true);
 
-                request.RequestMessage.Version = new Version(2, 0);
-
                 using var responseMessage = await _httpClient.SendAsync(
                     request.RequestMessage,
                     HttpCompletionOption.ResponseHeadersRead,
@@ -373,7 +371,7 @@ namespace ApiClient.Runtime
                         {
                             char[] buffer = new char[_streamBufferSize];
                             string partialMessage = "";
-                            
+
                             do
                             {
                                 if (request.CancellationToken.IsCancellationRequested)
@@ -384,12 +382,12 @@ namespace ApiClient.Runtime
                                 int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
                                 var readString = new string(buffer)[..charsRead];
 
-                               /*
-                                    On some platform the message might be returned in chunks. 
-                                    "0A 0A" -> "\n\n" ending characters mean that we've got full message.
-                                    "0D 0A" -> "\r\n" means that we haven't
-                                    As a workaround check for those endings and combine full message from them.
-                                */
+                                /*
+                                     On some platform the message might be returned in chunks. 
+                                     "0A 0A" -> "\n\n" ending characters mean that we've got full message.
+                                     "0D 0A" -> "\r\n" means that we haven't
+                                     As a workaround check for those endings and combine full message from them.
+                                 */
                                 if (readString.EndsWith("\n\n") == false)
                                 {
                                     partialMessage += readString;
@@ -566,7 +564,7 @@ namespace ApiClient.Runtime
             try
             {
                 await _retryPolicy.ExecuteAsync(async (c, ct) =>
-                {
+                {                    
                     await _middleware.ProcessRequest(graphQLRequest, false);
 
                     var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
