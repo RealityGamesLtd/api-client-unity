@@ -280,7 +280,7 @@ namespace ApiClient.Runtime
                             }
 
                             // if parsing content was unsuccessful then try to parse it as error
-                            if (content == null)
+                            if (content == null || (int)responseMessage.StatusCode > 300)
                             {
                                 // try parsing content with provided error type
                                 try
@@ -291,6 +291,12 @@ namespace ApiClient.Runtime
                                 {
                                     // do nothing with this exception as we don't want to propagate an error
                                     // of parsing error response
+                                }
+
+                                if (error != null)
+                                {
+                                    // do not propagate parsing error if we were able to get actuall error message
+                                    response = null;
                                 }
                             }
                         }
