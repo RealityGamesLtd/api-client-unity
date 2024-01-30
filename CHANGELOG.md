@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2024-01-30
+### Added
+- support for http 2.0
+### Fix
+- Incorrect propagation of internal server error
+
 ## [1.0.4] - 2023-11-15
 ### Improvement
 - Combining stream messages when received in chunks
