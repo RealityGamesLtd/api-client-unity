@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -36,6 +37,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             return request;
         }
 
@@ -46,6 +49,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
@@ -58,6 +63,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             return request;
         }
 
@@ -68,6 +75,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -82,6 +91,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
             return request;
@@ -94,6 +105,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -108,6 +121,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             if (jsonBody != null) request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
             return request;
         }
@@ -119,6 +134,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -133,6 +150,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
             return request;
@@ -146,6 +165,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             return request;
         }
 
@@ -156,6 +177,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
@@ -168,6 +191,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             return request;
         }
 
@@ -178,6 +203,8 @@ namespace ApiClient.Runtime
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
@@ -191,6 +218,8 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
+            request.RequestMessage.Version = new Version(2, 0);
+
             return request;
         }
 
@@ -202,6 +231,8 @@ namespace ApiClient.Runtime
                 Query = query,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
@@ -215,6 +246,8 @@ namespace ApiClient.Runtime
                 Variables = variables,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }

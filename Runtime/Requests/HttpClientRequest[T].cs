@@ -89,6 +89,7 @@ namespace ApiClient.Runtime.Requests
                 req.RequestUri)
             {
                 Content = req.Content,
+                Version = req.Version
             };
 
             var headers = req.Headers;

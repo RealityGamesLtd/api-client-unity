@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -246,13 +247,13 @@ namespace ApiClient.Runtime
 
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
-                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(reqest, false);
+                    await _middleware.ProcessRequest(request, false);
 
                     try
                     {
-                        using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
+                        using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         var headers = responseMessage.Headers;
                         T content = default;
@@ -274,22 +275,28 @@ namespace ApiClient.Runtime
                                     responseMessage.Headers,
                                     responseMessage.Content.Headers,
                                     body,
-                                    reqest.RequestMessage.RequestUri,
+                                    request.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
                             }
 
                             // if parsing content was unsuccessful then try to parse it as error
-                            if (content == null)
+                            if (content == null || (int)responseMessage.StatusCode > 300)
                             {
                                 // try parsing content with provided error type
                                 try
                                 {
                                     error = JsonConvert.DeserializeObject<E>(body);
                                 }
-                                catch (Exception) 
+                                catch (Exception)
                                 {
                                     // do nothing with this exception as we don't want to propagate an error
                                     // of parsing error response
+                                }
+
+                                if (error != null)
+                                {
+                                    // do not propagate parsing error if we were able to get actuall error message
+                                    response = null;
                                 }
                             }
                         }
@@ -300,15 +307,15 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 body,
-                                reqest.RequestMessage.RequestUri,
+                                request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
                     {
-                        if (reqest.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(reqest.RequestMessage.RequestUri);
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(reqest.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
                     }
                     catch (Exception ex)
                     {
@@ -316,10 +323,10 @@ namespace ApiClient.Runtime
                         if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
                         message += ex.Message;
 
-                        response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
 
-                    return await _middleware.ProcessResponse(response, reqest.RequestId, false);
+                    return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -347,7 +354,12 @@ namespace ApiClient.Runtime
             try
             {
                 await _middleware.ProcessRequest(request, true);
-                using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, HttpCompletionOption.ResponseHeadersRead, request.CancellationToken);
+
+                using var responseMessage = await _httpClient.SendAsync(
+                    request.RequestMessage,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    request.CancellationToken);
+
                 // read a stream only when 200 status code was returned
                 if (responseMessage.IsSuccessStatusCode)
                 {
@@ -358,6 +370,7 @@ namespace ApiClient.Runtime
                         await Task.Run(async () =>
                         {
                             char[] buffer = new char[_streamBufferSize];
+                            string partialMessage = "";
 
                             do
                             {
@@ -366,8 +379,25 @@ namespace ApiClient.Runtime
                                     throw new TaskCanceledException();
                                 }
 
-                                int charsRead = await streamReader.ReadAsync(buffer, 0, _streamBufferSize);
-                                var readString = new string(buffer).Substring(0, charsRead);
+                                int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
+                                var readString = new string(buffer)[..charsRead];
+
+                                /*
+                                     On some platform the message might be returned in chunks. 
+                                     "0A 0A" -> "\n\n" ending characters mean that we've got full message.
+                                     "0D 0A" -> "\r\n" means that we haven't
+                                     As a workaround check for those endings and combine full message from them.
+                                 */
+                                if (readString.EndsWith("\n\n") == false)
+                                {
+                                    partialMessage += readString;
+                                    continue;
+                                }
+                                else
+                                {
+                                    readString = partialMessage + readString;
+                                    partialMessage = "";
+                                }
 
                                 // update content length
                                 responseMessage.Content.Headers.ContentLength = readString.Length;
@@ -398,6 +428,11 @@ namespace ApiClient.Runtime
                                 {
                                     for (int i = 0; i < matches.Count; i++)
                                     {
+                                        if (request.CancellationToken.IsCancellationRequested)
+                                        {
+                                            throw new TaskCanceledException();
+                                        }
+
                                         var jsonString = matches[i].Value;
 
                                         if (!string.IsNullOrEmpty(jsonString))
@@ -465,8 +500,8 @@ namespace ApiClient.Runtime
                                             false));
                                 }
                             }
-                            while (!streamReader.EndOfStream);
-                        }, request.CancellationToken);
+                            while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
+                        }, request.CancellationToken).ContinueWith(c => { }, request.CancellationToken);
                     };
                 }
                 else
@@ -529,7 +564,7 @@ namespace ApiClient.Runtime
             try
             {
                 await _retryPolicy.ExecuteAsync(async (c, ct) =>
-                {
+                {                    
                     await _middleware.ProcessRequest(graphQLRequest, false);
 
                     var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
