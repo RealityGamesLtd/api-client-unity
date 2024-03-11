@@ -173,7 +173,7 @@ namespace ApiClient.Runtime
                             }
                             catch (Exception ex)
                             {
-                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // if unsuccessfull ->
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
@@ -268,7 +268,7 @@ namespace ApiClient.Runtime
                             }
                             catch (Exception ex)
                             {
-                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // if unsuccessfull ->
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
