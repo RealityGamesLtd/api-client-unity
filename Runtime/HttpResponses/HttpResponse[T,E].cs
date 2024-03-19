@@ -4,6 +4,12 @@ using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
+    /// <summary>
+    /// A type of HttpResponse where either content <see cref="T"/> or error <see cref="E"/> was
+    /// obtained from response's body.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <typeparam name="E"></typeparam>
     public class HttpResponse<T, E> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
     {
         public HttpResponse(T content, E error, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)

@@ -4,6 +4,10 @@ using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
+    /// <summary>
+    /// A type of HttpResponse where no content was
+    /// obtained from response's body.
+    /// </summary>
     public class HttpResponse : IHttpResponse, IHttpResponseStatusCode
     {
         public HttpResponse(Uri uri, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, HttpStatusCode statusCode)

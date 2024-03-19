@@ -4,6 +4,11 @@ using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
+    /// <summary>
+    /// A type of HttpResponse where content <see cref="T"/> was
+    /// obtained from response's body.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
     public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
     {
         public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
