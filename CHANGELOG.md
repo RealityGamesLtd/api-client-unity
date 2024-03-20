@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2024-03-20
+### Improvement
+- Setting Http version by ApiClientOptions
+- Refactor and improved naming
+
+## [1.0.6] - 2024-02-02
+### Improvement
+- Removed obsolete UserFacingErrorMessage from ResponseWithContent
+
 ## [1.0.5] - 2024-01-30
 ### Added
 - support for http 2.0

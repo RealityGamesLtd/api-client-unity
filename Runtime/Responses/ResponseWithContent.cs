@@ -22,7 +22,6 @@ namespace ApiClient.Runtime
         public bool IsFromCache { get; set; }
 
         public T Content { get; private set; }
-        public string UserFacingErrorMessage { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
         public HttpContentHeaders ContentHeaders { get; private set; }
 
@@ -34,17 +33,21 @@ namespace ApiClient.Runtime
 
         }
 
-        public ResponseWithContent(IHttpResponse httpResponse)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="response"><see cref="IHttpResponse"/> response that was returned from <see cref="ApiClient.SendHttpRequest{T, E}(Requests.HttpClientRequest{T, E})"/></param>
+        public ResponseWithContent(IHttpResponse response)
         {
-            IsClientError = httpResponse.IsClientError;
-            IsServerError = httpResponse.IsServerError;
-            IsContentParsingError = httpResponse.IsContentParsingError;
-            IsNetworkError = httpResponse.IsNetworkError;
-            IsAborted = httpResponse.IsAborted;
-            IsTimeout = httpResponse.IsTimeout;
-            RequestUri = httpResponse.RequestUri;
-            Headers = httpResponse.Headers;
-            ContentHeaders = httpResponse.ContentHeaders;
+            IsClientError = response.IsClientError;
+            IsServerError = response.IsServerError;
+            IsContentParsingError = response.IsContentParsingError;
+            IsNetworkError = response.IsNetworkError;
+            IsAborted = response.IsAborted;
+            IsTimeout = response.IsTimeout;
+            RequestUri = response.RequestUri;
+            Headers = response.Headers;
+            ContentHeaders = response.ContentHeaders;
         }
 
         public void SetContent(T content)

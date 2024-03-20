@@ -1,6 +1,7 @@
 using System;
 using Polly.Retry;
 using ApiClient.Runtime.HttpResponses;
+using System.Net;
 
 namespace ApiClient.Runtime
 {
@@ -31,5 +32,11 @@ namespace ApiClient.Runtime
         /// Stream buffer size in bytes. Default = 4096 bytes
         /// </summary>
         public int StreamBufferSize { get; set; } = 4096;
+
+        /// <summary>
+        /// Specify version of <see cref="HttpVersion"/>
+        /// </summary>
+        /// <value></value>
+        public Version Version { get; } = HttpVersion.Version20;
     }
 }
