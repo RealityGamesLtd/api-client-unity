@@ -28,17 +28,21 @@ namespace ApiClient.Runtime
 
         }
 
-        public Response(IHttpResponse httpResponse)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="response"><see cref="IHttpResponse"/> response that was returned from <see cref="ApiClient.SendHttpRequest{T}(Requests.HttpClientRequest{T})"/></param>
+        public Response(IHttpResponse response)
         {
-            IsClientError = httpResponse.IsClientError;
-            IsServerError = httpResponse.IsServerError;
-            IsContentParsingError = httpResponse.IsContentParsingError;
-            IsNetworkError = httpResponse.IsNetworkError;
-            IsAborted = httpResponse.IsAborted;
-            IsTimeout = httpResponse.IsTimeout;
-            RequestUri = httpResponse.RequestUri;
-            Headers = httpResponse.Headers;
-            ContentHeaders = httpResponse.ContentHeaders;
+            IsClientError = response.IsClientError;
+            IsServerError = response.IsServerError;
+            IsContentParsingError = response.IsContentParsingError;
+            IsNetworkError = response.IsNetworkError;
+            IsAborted = response.IsAborted;
+            IsTimeout = response.IsTimeout;
+            RequestUri = response.RequestUri;
+            Headers = response.Headers;
+            ContentHeaders = response.ContentHeaders;
         }
 
         public void SetError(T errorCode)

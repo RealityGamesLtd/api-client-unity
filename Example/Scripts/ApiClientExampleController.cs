@@ -6,6 +6,7 @@ using TMPro;
 using ApiClient.Runtime.HttpResponses;
 using ApiClient.Runtime.GraphQLBuilder;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace ApiClientExample
 {
@@ -51,13 +52,13 @@ namespace ApiClientExample
             responseView.SetActive(true);
             responseText.text = "";
 
-            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, LrtResponse<AnonRegisterResponse>>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
             var httpResponse = await request.Send();
             var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);
 
             if (httpResponse.HasNoErrors)
             {
-                var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>, LrtResponse<AnonRegisterResponse>>;
+                var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>;
                 Debug.Log(responseContent.Content.response.playerId);
                 responseText.text = responseContent.Content.response.playerId;
             }
@@ -251,6 +252,16 @@ namespace ApiClientExample
         public enum ResponseErrorCode
         {
             Unknown
+        }
+
+        public class ServerErrorResponse
+        {
+            [JsonProperty(Required = Required.Always)]
+            public string subcode;
+            [JsonProperty(Required = Required.Always)]
+            public string reason;
+            [JsonProperty(Required = Required.AllowNull)]
+            public string args;
         }
     }
 }

@@ -132,14 +132,14 @@ namespace ApiClient.Runtime
         /// response body will be deserialized. If deserialization is inpossible it will return
         /// <see cref="ParsingErrorHttpResponse"/>.
         /// </summary>
-        /// <typeparam name="T">Response error type</typeparam>
+        /// <typeparam name="E">Response error type</typeparam>
         /// <param name="req">Request to make<</param>
         /// <returns><see cref="HttpResponse"/> or 
         /// <see cref="ParsingErrorHttpResponse"/> or 
         /// <see cref="AbortedHttpResponse"/> or 
         /// <see cref="TimeoutHttpResponse"/> or 
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
-        public async Task<IHttpResponse> SendHttpRequest<T>(HttpClientRequest<T> req)
+        public async Task<IHttpResponse> SendHttpRequest<E>(HttpClientRequest<E> req)
         {
             await _middleware.ProcessRequest(req, true);
 
@@ -162,18 +162,21 @@ namespace ApiClient.Runtime
                         using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         var headers = responseMessage.Headers;
-                        T content = default;
+                        E content = default;
 
-                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
+                        // we can try to parse the error message only when there is correct media type and
+                        // when we have received status code meant for errors
+                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" && 
+                            (int)responseMessage.StatusCode > 400)
                         {
                             // try parsing content with provided content type
                             try
                             {
-                                content = JsonConvert.DeserializeObject<T>(body);
+                                content = JsonConvert.DeserializeObject<E>(body);
                             }
                             catch (Exception ex)
                             {
-                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // if unsuccessfull ->
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
@@ -185,7 +188,7 @@ namespace ApiClient.Runtime
                             }
                         }
 
-                        response ??= new HttpResponse<T>(
+                        response ??= new HttpResponse<E>(
                                 content,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
@@ -268,7 +271,7 @@ namespace ApiClient.Runtime
                             }
                             catch (Exception ex)
                             {
-                                // if unsuccessfull it's not an error and content parsing failed, 
+                                // if unsuccessfull ->
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
@@ -280,7 +283,7 @@ namespace ApiClient.Runtime
                             }
 
                             // if parsing content was unsuccessful then try to parse it as error
-                            if (content == null || (int)responseMessage.StatusCode > 300)
+                            if (content == null || (int)responseMessage.StatusCode > 400)
                             {
                                 // try parsing content with provided error type
                                 try

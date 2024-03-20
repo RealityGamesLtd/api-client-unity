@@ -8,7 +8,7 @@ using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime.Requests
 {
-    public class HttpClientRequest<T> : IHttpRequest
+    public class HttpClientRequest<E> : IHttpRequest
     {
         public bool IsSent { get; private set; }
         public CancellationToken CancellationToken { get; }
@@ -71,9 +71,9 @@ namespace ApiClient.Runtime.Requests
             return await _apiClient.SendHttpRequest(this);
         }
 
-        public HttpClientRequest<T> RecreateWithHttpRequestMessage()
+        public HttpClientRequest<E> RecreateWithHttpRequestMessage()
         {
-            var recreatedHttpRequestMessage = new HttpClientRequest<T>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
+            var recreatedHttpRequestMessage = new HttpClientRequest<E>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
             {
                 Authentication = this.Authentication,
                 RequestId = Guid.NewGuid().ToString()

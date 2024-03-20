@@ -8,16 +8,20 @@ using ApiClient.Runtime.Requests;
 
 namespace ApiClient.Runtime
 {
+    /// <summary>
+    /// <see cref="ApiClientConnection"/> is responsible for preparing Requests
+    /// </summary>
     public class ApiClientConnection : IApiClientConnection
     {
         private readonly ApiClient _apiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
-
+        private Version _httpVersion;
 
         public ApiClientConnection(ApiClientOptions apiClientOptions)
         {
             _apiClient = new ApiClient(apiClientOptions);
+            _httpVersion = apiClientOptions.Version;
         }
 
         public void SetDefaultHeader(string key, string value)
@@ -31,52 +35,68 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest CreateGet(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest(new HttpRequestMessage(HttpMethod.Get, url), _apiClient, ct)
+            var request = new HttpClientRequest(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
-        public HttpClientRequest<T> CreateGet<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<E> CreateGet<E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T>(new HttpRequestMessage(HttpMethod.Get, url), _apiClient, ct)
+            var request = new HttpClientRequest<E>(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
         public HttpClientRequest<T, E> CreateGet<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T, E>(new HttpRequestMessage(HttpMethod.Get, url), _apiClient, ct)
+            var request = new HttpClientRequest<T, E>(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
         public HttpClientRequest CreatePost(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest(new HttpRequestMessage(HttpMethod.Post, url), _apiClient, ct)
+            var request = new HttpClientRequest(
+                new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -85,13 +105,17 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest<T> CreatePost<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T>(new HttpRequestMessage(HttpMethod.Post, url), _apiClient, ct)
+            var request = new HttpClientRequest<T>(
+                new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -100,13 +124,17 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest<T, E> CreatePost<T, E>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T, E>(new HttpRequestMessage(HttpMethod.Post, url), _apiClient, ct)
+            var request = new HttpClientRequest<T, E>(
+                new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -115,13 +143,17 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest CreatePut(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest(new HttpRequestMessage(HttpMethod.Put, url), _apiClient, ct)
+            var request = new HttpClientRequest(
+                new HttpRequestMessage(HttpMethod.Put, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null) request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
             return request;
@@ -129,13 +161,17 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest<T> CreatePut<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T>(new HttpRequestMessage(HttpMethod.Put, url), _apiClient, ct)
+            var request = new HttpClientRequest<T>(
+                new HttpRequestMessage(HttpMethod.Put, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -144,13 +180,17 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest<T, E> CreatePut<T, E>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T, E>(new HttpRequestMessage(HttpMethod.Put, url), _apiClient, ct)
+            var request = new HttpClientRequest<T, E>(
+                new HttpRequestMessage(HttpMethod.Put, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             if (jsonBody != null)
                 request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
@@ -159,52 +199,68 @@ namespace ApiClient.Runtime
 
         public HttpClientRequest CreateDelete(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest(new HttpRequestMessage(HttpMethod.Delete, url), _apiClient, ct)
+            var request = new HttpClientRequest(
+                new HttpRequestMessage(HttpMethod.Delete, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
         public HttpClientRequest<T> CreateDelete<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T>(new HttpRequestMessage(HttpMethod.Delete, url), _apiClient, ct)
+            var request = new HttpClientRequest<T>(
+                new HttpRequestMessage(HttpMethod.Delete, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
         public HttpClientRequest<T, E> CreateDelete<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientRequest<T, E>(new HttpRequestMessage(HttpMethod.Delete, url), _apiClient, ct)
+            var request = new HttpClientRequest<T, E>(
+                new HttpRequestMessage(HttpMethod.Delete, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
 
         public HttpClientStreamRequest<T> CreateGetStreamRequest<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
         {
-            var request = new HttpClientStreamRequest<T>(new HttpRequestMessage(HttpMethod.Get, url), _apiClient, ct)
+            var request = new HttpClientStreamRequest<T>(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
             {
                 Authentication = authentication,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            request.RequestMessage.Version = new Version(2, 0);
 
             return request;
         }
