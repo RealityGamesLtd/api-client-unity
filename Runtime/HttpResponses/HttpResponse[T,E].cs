@@ -23,10 +23,28 @@ namespace ApiClient.Runtime.HttpResponses
             Body = body;
         }
 
+        /// <summary>
+        /// Content retrieved from response's body
+        /// </summary>
+        /// <value></value>
         public T Content { get; }
+
+        /// <summary>
+        /// Error retrieved from response's body
+        /// </summary>
+        /// <value></value>
         public E Error { get; }
 
+        /// <summary>
+        /// Error is categorised as client error when <see cref="StatusCode"/> is between 400 & 500
+        /// </summary>
+        /// <returns></returns>
         public bool IsClientError => (int)StatusCode >= 400 && (int)StatusCode < 500;
+        
+        /// <summary>
+        /// Error is categorised as client error when <see cref="StatusCode"/> is over 500
+        /// </summary>
+        /// <returns></returns>
         public bool IsServerError => (int)StatusCode >= 500;
         public bool IsContentParsingError => false;
         public bool IsNetworkError => false;
@@ -36,6 +54,11 @@ namespace ApiClient.Runtime.HttpResponses
         public HttpStatusCode StatusCode { get; private set; }
         public HttpResponseHeaders Headers { get; private set; }
         public HttpContentHeaders ContentHeaders { get; private set; }
+
+        /// <summary>
+        /// Unprocessed response's body string
+        /// </summary>
+        /// <value></value>
         public string Body { get; private set; }
     }
 }

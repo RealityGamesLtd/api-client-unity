@@ -18,7 +18,16 @@ namespace ApiClient.Runtime.HttpResponses
             ContentHeaders = contentHeaders;
         }
 
+        /// <summary>
+        /// Error is categorised as client error when <see cref="StatusCode"/> is between 400 & 500
+        /// </summary>
+        /// <returns></returns>
         public bool IsClientError => (int)StatusCode >= 400 && (int)StatusCode < 500;
+
+        /// <summary>
+        /// Error is categorised as client error when <see cref="StatusCode"/> is over 500
+        /// </summary>
+        /// <returns></returns>
         public bool IsServerError => (int)StatusCode >= 500;
         public bool IsContentParsingError => false;
         public bool IsNetworkError => false;
