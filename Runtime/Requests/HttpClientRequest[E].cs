@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -44,6 +45,28 @@ namespace ApiClient.Runtime.Requests
                 {
                     RequestMessage.Headers.Add(kv.Key, kv.Value);
                 }
+            }
+        }
+
+        public Dictionary<string, string> Headers
+        {
+            set
+            {
+                if (value == null)
+                {
+                    return;
+                }
+
+                foreach (var kv in value)
+                {
+                    RequestMessage.Headers.Add(kv.Key, kv.Value);
+                }
+            }
+            get
+            {
+                return RequestMessage.Headers.ToDictionary(
+                    x => x.Key,
+                    x => string.Join(";", x.Value));
             }
         }
 

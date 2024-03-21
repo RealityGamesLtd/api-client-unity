@@ -16,7 +16,7 @@ namespace ApiClient.Runtime
         private readonly ApiClient _apiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
-        private Version _httpVersion;
+        private readonly Version _httpVersion;
 
         public ApiClientConnection(ApiClientOptions apiClientOptions)
         {
@@ -33,7 +33,12 @@ namespace ApiClient.Runtime
             _defaultHeaders.Add(key, value);
         }
 
-        public HttpClientRequest CreateGet(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest CreateGet(
+            string url,
+            CancellationToken ct,
+            AuthenticationHeaderValue authentication = null,
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -44,13 +49,24 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
+
+            foreach(var header in headers)
+            {
+                request.RequestMessage.Headers.Add(header.Key, header.Value);
+            }
 
             return request;
         }
 
-        public HttpClientRequest<E> CreateGet<E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<E> CreateGet<E>(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -61,13 +77,19 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public HttpClientRequest<T, E> CreateGet<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T, E> CreateGet<T, E>(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -78,13 +100,20 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public HttpClientRequest CreatePost(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest CreatePost(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -95,6 +124,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -103,7 +133,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest<T> CreatePost<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T> CreatePost<T>(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -114,6 +150,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -122,7 +159,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest<T, E> CreatePost<T, E>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T, E> CreatePost<T, E>(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -133,6 +176,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -141,7 +185,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest CreatePut(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest CreatePut(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -152,6 +202,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -159,7 +210,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest<T> CreatePut<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T> CreatePut<T>(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -170,6 +227,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -178,7 +236,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest<T, E> CreatePut<T, E>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T, E> CreatePut<T, E>(
+            string url, 
+            string jsonBody, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -189,6 +253,7 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
@@ -197,7 +262,12 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest CreateDelete(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest CreateDelete(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -208,13 +278,19 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public HttpClientRequest<T> CreateDelete<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T> CreateDelete<T>(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -225,13 +301,19 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public HttpClientRequest<T, E> CreateDelete<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientRequest<T, E> CreateDelete<T, E>(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -242,13 +324,19 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public HttpClientStreamRequest<T> CreateGetStreamRequest<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public HttpClientStreamRequest<T> CreateGetStreamRequest<T>(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -259,51 +347,71 @@ namespace ApiClient.Runtime
                 ct)
             {
                 Authentication = authentication,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
             return request;
         }
 
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(IQuery query, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
+            IQuery query, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new GraphQLClientRequest<T>(_apiClient, ct)
             {
                 Authentication = authentication,
                 Query = query.ToString(),
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
-            request.RequestMessage.Version = new Version(2, 0);
+            request.RequestMessage.Version = _httpVersion;
 
             return request;
         }
 
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(string query, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
+            string query, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new GraphQLClientRequest<T>(_apiClient, ct)
             {
                 Authentication = authentication,
                 Query = query,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
-            request.RequestMessage.Version = new Version(2, 0);
+            request.RequestMessage.Version = _httpVersion;
 
             return request;
         }
 
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(string query, object variables, CancellationToken ct, AuthenticationHeaderValue authentication = null, bool useDefaultHeaders = true)
+        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
+            string query, 
+            object variables, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true)
         {
             var request = new GraphQLClientRequest<T>(_apiClient, ct)
             {
                 Authentication = authentication,
                 Query = query,
                 Variables = variables,
+                Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
 
-            request.RequestMessage.Version = new Version(2, 0);
+            request.RequestMessage.Version = _httpVersion;
 
             return request;
         }
