@@ -26,6 +26,7 @@ namespace ApiClient.Runtime.Requests
         public HttpRequestMessage RequestMessage { get; private set; }
 
         public Dictionary<string, string> DefaultHeaders { private get; set; }
+        public Dictionary<string, string> Headers { private get; set; }
 
         private readonly ApiClient _apiClient;
 
@@ -37,6 +38,14 @@ namespace ApiClient.Runtime.Requests
             if (DefaultHeaders != null)
             {
                 foreach (var kv in DefaultHeaders)
+                {
+                    r.Headers.Add(kv.Key, kv.Value);
+                }
+            }
+
+            if (Headers != null)
+            {
+                foreach (var kv in Headers)
                 {
                     r.Headers.Add(kv.Key, kv.Value);
                 }

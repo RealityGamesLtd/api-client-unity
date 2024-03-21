@@ -37,6 +37,6 @@ namespace ApiClient.Runtime
         /// Specify version of <see cref="HttpVersion"/>
         /// </summary>
         /// <value></value>
-        public Version Version { get; } = HttpVersion.Version20;
+        public Version Version { get; set; } = HttpVersion.Version20;
     }
 }
