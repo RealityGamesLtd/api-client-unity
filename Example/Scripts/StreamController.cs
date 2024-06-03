@@ -99,6 +99,11 @@ namespace ApiClientExample
 
         private void OnApplicationPause(bool pauseStatus)
         {
+            if (_streamRequestCts == null)
+            {
+                return;
+            }
+
             if (pauseStatus)
             {
                 CancelStream();

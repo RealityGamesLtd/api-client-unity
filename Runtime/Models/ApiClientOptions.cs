@@ -34,6 +34,11 @@ namespace ApiClient.Runtime
         public int StreamBufferSize { get; set; } = 4096;
 
         /// <summary>
+        /// Buffer size for byte array requests in bytes. Default = 4096 bytes
+        /// </summary>
+        public int ByteArrayBufferSize { get; set; } = 4096;
+
+        /// <summary>
         /// Specify version of <see cref="HttpVersion"/>
         /// </summary>
         /// <value></value>

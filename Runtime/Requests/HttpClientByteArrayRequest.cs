@@ -9,12 +9,12 @@ using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime.Requests
 {
-    public class HttpClientStreamRequest<T> : IHttpRequest
+    public class HttpClientByteArrayRequest : IHttpRequest
     {
         public bool IsSent { get; private set; }
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
-        public string RequestId { get; } = Guid.NewGuid().ToString();
+        public string RequestId { get; private set;} = Guid.NewGuid().ToString();
         public Uri Uri { get; private set; }
 
         public AuthenticationHeaderValue Authentication
@@ -75,7 +75,7 @@ namespace ApiClient.Runtime.Requests
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientStreamRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientByteArrayRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
@@ -83,7 +83,7 @@ namespace ApiClient.Runtime.Requests
             _apiClient = apiClient;
         }
 
-        public async Task Send(Action<IHttpResponse> OnStreamResponse)
+        public async Task<IHttpResponse> Send(Action<ByteArrayRequestProgress> OnProgressChanged)
         {
             if (IsSent)
             {
@@ -92,7 +92,45 @@ namespace ApiClient.Runtime.Requests
 
             IsSent = true;
 
-            await _apiClient.SendStreamRequest(this, OnStreamResponse);
+            return await _apiClient.SendByteArrayRequest(this, OnProgressChanged);
+        }
+
+        public HttpClientByteArrayRequest RecreateWithHttpRequestMessage()
+        {
+            var recreatedHttpRequestMessage = new HttpClientByteArrayRequest(
+                RecreateRequestMessage(this.RequestMessage),
+                _apiClient,
+                CancellationToken)
+            {
+                Authentication = this.Authentication,
+                RequestId = Guid.NewGuid().ToString()
+            };
+
+            return recreatedHttpRequestMessage;
+        }
+
+        private HttpRequestMessage RecreateRequestMessage(HttpRequestMessage req)
+        {
+            HttpRequestMessage httpRequestMessage = new HttpRequestMessage(
+                req.Method,
+                req.RequestUri)
+            {
+                Content = req.Content,
+            };
+
+            var headers = req.Headers;
+
+            foreach (KeyValuePair<string, IEnumerable<string>> kv in headers)
+            {
+                httpRequestMessage.Headers.Add(kv.Key, kv.Value);
+            }
+
+            var properties = req.Properties;
+            foreach (KeyValuePair<string, object> kv in properties)
+            {
+                httpRequestMessage.Properties.Add(kv.Key, kv.Value);
+            }
+            return httpRequestMessage;
         }
     }
 }
