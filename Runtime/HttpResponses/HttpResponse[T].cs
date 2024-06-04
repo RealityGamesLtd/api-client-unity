@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Http.Headers;
+using ApiClient.Runtime.Cache;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -9,7 +10,7 @@ namespace ApiClient.Runtime.HttpResponses
     /// obtained from response's body.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
+    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, ICachedHttpResponse
     {
         public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
         {
@@ -52,5 +53,7 @@ namespace ApiClient.Runtime.HttpResponses
         /// </summary>
         /// <value></value>
         public string Body { get; private set; }
+
+        bool ICachedHttpResponse.IsFromCache { get; set; }
     }
 }

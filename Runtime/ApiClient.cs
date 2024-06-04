@@ -11,11 +11,14 @@ using Polly;
 using Polly.Retry;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Cache;
 
 namespace ApiClient.Runtime
 {
     public class ApiClient
     {
+        public UrlCache Cache { get; } = new();
+
         private readonly GraphQLHttpClient _graphQLClient;
         private readonly HttpClient _httpClient;
         private readonly IApiClientMiddleware _middleware;

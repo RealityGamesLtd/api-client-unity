@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime.Requests
@@ -13,9 +14,10 @@ namespace ApiClient.Runtime.Requests
     {
         public bool IsSent { get; private set; }
         public CancellationToken CancellationToken { get; }
-        public HttpRequestMessage RequestMessage { get; private set; }
-        public string RequestId { get; private set;} = Guid.NewGuid().ToString();
+        public HttpRequestMessage RequestMessage { get; }
+        public string RequestId { get; private set; } = Guid.NewGuid().ToString();
         public Uri Uri { get; private set; }
+        public CachePolicy CachePolicy { get; set; }
 
         public AuthenticationHeaderValue Authentication
         {
@@ -92,7 +94,10 @@ namespace ApiClient.Runtime.Requests
 
             IsSent = true;
 
-            return await _apiClient.SendByteArrayRequest(this, OnProgressChanged);
+            return await _apiClient.Cache.Process(
+                this, 
+                CachePolicy, 
+                _apiClient.SendByteArrayRequest(this, OnProgressChanged));
         }
 
         public HttpClientByteArrayRequest RecreateWithHttpRequestMessage()
@@ -103,7 +108,9 @@ namespace ApiClient.Runtime.Requests
                 CancellationToken)
             {
                 Authentication = this.Authentication,
-                RequestId = Guid.NewGuid().ToString()
+                // generate new unique request id
+                RequestId = Guid.NewGuid().ToString(),
+                CachePolicy = this.CachePolicy
             };
 
             return recreatedHttpRequestMessage;
