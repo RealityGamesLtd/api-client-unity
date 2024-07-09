@@ -119,7 +119,14 @@ namespace ApiClient.Runtime.Cache
                 }
             }
 
-            if (!_cachedData.TryAdd(url, new CacheData<IHttpResponse>(data, expireIn)))
+            // check if cache size is not exceeded
+            // log amount left
+
+            if (!_cachedData.TryAdd(url,
+                new CacheData<IHttpResponse>(
+                    data,
+                    expireIn,
+                    (data as ICachedHttpResponse).ContentSize())))
             {
                 // log error
                 UnityEngine.Debug.LogError($"{nameof(UrlCache)} -> Couldn't add data to cache for:{url}");
@@ -141,6 +148,18 @@ namespace ApiClient.Runtime.Cache
         public void InvalidateAll()
         {
             _cachedData.Clear();
+        }
+
+        private long GetCacheTotalSize()
+        {
+            long size = 0;
+
+            foreach (var cacheKv in _cachedData)
+            {
+                size += cacheKv.Value.Size;
+            }
+
+            return size;
         }
     }
 }

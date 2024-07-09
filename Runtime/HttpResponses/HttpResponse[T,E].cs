@@ -64,5 +64,12 @@ namespace ApiClient.Runtime.HttpResponses
         public string Body { get; private set; }
 
         bool ICachedHttpResponse.IsFromCache { get; set; }
+
+        public long ContentSize()
+        {
+            // assume the content will have the same size as body.
+            // this doesn't have to be the exact value
+            return Body.Length * sizeof(char) * 2; 
+        }
     }
 }
