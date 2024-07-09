@@ -51,8 +51,8 @@ namespace ApiClientExample
 
         private static async Task MakeStreamRequest(string playerName, long offset, CancellationToken ct)
         {
-            var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI3ODkxMjk0Zi1lMTM4LTRiN2EtYjQ4Zi05NmE1ZDA0ODg3YmYiLCJyb2xlIjoicGxheWVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTY5OTA4MjE3MSwiaWF0IjoxNjk2NDkwMTcxfQ.DWJ7FzTUvsp2TPjfUxt5Dpg7yFHtAK61Zh2Z6i2LlzyofZa023qSla7G10PTCBd24s4seCFH1MxXnuY798rFbGGvLiGwLMnePeJXBEOmTYsJpCrxcp2vNxbIPvpX4xa5qPekPlwiNJb1sREF-PLdclO7fSxlIYIDnjaL8Iui9ujJWw8Rg5gL4Wv9nNcDnZv7FUF7qLwn4p5HfTAvNPB17rgoR8_6xt5pVP1G8rfm_G8cP_G7_4HJ_nnLtlT8sv1hnNSXG4S93i0clxzIF0emgwe_W_Jux_XItW6Qhx-XMs9jdJUjzAfx9V3WKEQDXtnxdIH5tr-QhyYyR_9NTMOiUpacpPdvaN8aWoS6iOsdJc9Y7sKzTwK920o4e0DJEVAie07JSzMgRitLmY4Dy01L7XWwIsJ5-yvSzXKimcC8bd-vakoQR3qFUz0vNLiN8OuVk8_gHbCFCD2sl-IvBwrRbJGzB27CAmTke5wjjtZYsBPSnD9RcZG6nkeAuuVN82cB_7aGFtP_Scyk0d4UUdwIC24p4HQ-MN8aZL-03Vr3_am3SfdpJtLf-M8hME8UDPAF72pwV1-iV2ikmnRzTc_qciAvF14DpJem7sU8o-JefZla8_s4TAMqCVeF2QITXC6xDFUuU7YIIOHj5s15JqK8Bz6qxwuzh0KTm1IiwmGZtZw");
-            var request = Session.Instance.ApiClientConnecton.CreateGetStreamRequest<StreamData>($"http://sse-player-messages.mwo.r10s.r5y.io/stream?offset={offset}", ct, authentication);
+            var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkwNzM3Ni1mNzk2LWYwODItNjBhOC0zMjQwMDlkOGVjNDgiLCJyb2xlIjoicGxheWVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyMDUyMDQxNiwiaWF0IjoxNzIwNTE2ODE2fQ.HBHp3Y9YE7Ei4gXh0K7JwHjK52OVHo64jjj8oIQxWKrPBL8VhI3aeaiEvoW0NXTfczcxP-1xAid0jVdJUddHo2ur1IrtuCTh8FB9LkARkQTJub1FYlMzotpYTq_2zxlwy-VrgKNPZYROZhbldr0s48lWDywzdnRotjejl0MOZMmkpPakaqq1Yri_bYrMS5lbZMkmNSQzflrA-bV5dgDIzDsa1TsoYX5iPicNN53swwhRA9H78ZaEalgULd5WEzLNL4v3Yv6K9P7PywCOcftaAnbD5UU_RX5i8lMMYtDa0nlq0AsMExucTtHihVpjh4jL0UYYBq3AFKBdSHxAl78MQOXsCE5jEyynVOHEk09U8A7siRDwLxB-RDLF1kqdqc8XJj6FSWWEfEWKZW7vTD3QO88wIaTYCuwiDsQjUdT308lTjAe9tBsGJeXipz3qeugqidSnOmvIOY8JSSUMtcJDl8bhYHWBOS6ETctkv801-cfd_ePx4_oCbHFMKtu-i6A5ig7YOleA_QTJLFPzgVt6sv7gwGGB7pnAEHI-gW-YTnIrnsZEaisRC3N92BuwTc8_ZX_stSPZf3Un-TYJVL5hpFBHyb4QL64lcBuMMHYC8JtVdWndlxiUQUim8M7FbYN2Chb6Q54QoWS03aNFZ7_R3V5xaOBEt_sYL-vRRVTNeic");
+            var request = Session.Instance.ApiClientConnecton.CreateGetStreamRequest<StreamData>($"https://sse-player-messages.mwostg.r10s.r5y.io/stream?offset={offset}", ct, authentication);
 
             await request.Send(streamResponse =>
             {
@@ -86,7 +86,12 @@ namespace ApiClientExample
                         }
                     }
                 }
+            },
+            (readDelta) =>
+            {
+                Debug.Log($"Stream read delta:{readDelta}");
             });
+
         }
 
         /*
@@ -99,6 +104,11 @@ namespace ApiClientExample
 
         private void OnApplicationPause(bool pauseStatus)
         {
+            if (_streamRequestCts == null)
+            {
+                return;
+            }
+
             if (pauseStatus)
             {
                 CancelStream();

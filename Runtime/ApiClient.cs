@@ -166,7 +166,7 @@ namespace ApiClient.Runtime
 
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
-                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" && 
+                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" &&
                             (int)responseMessage.StatusCode > 400)
                         {
                             // try parsing content with provided content type
@@ -352,8 +352,13 @@ namespace ApiClient.Runtime
         /// <see cref="TimeoutHttpResponse"/> or 
         /// <see cref="NetworkErrorHttpResponse"/></param>
         /// <returns>Request Task</returns>
-        public async Task SendStreamRequest<T>(HttpClientStreamRequest<T> request, Action<IHttpResponse> OnStreamResponse)
+        public async Task SendStreamRequest<T>(
+            HttpClientStreamRequest<T> request,
+            Action<IHttpResponse> OnStreamResponse,
+            Action<TimeSpan> readDelta)
         {
+            DateTime streamLastReadTime = DateTime.UtcNow;
+
             try
             {
                 await _middleware.ProcessRequest(request, true);
@@ -382,8 +387,16 @@ namespace ApiClient.Runtime
                                     throw new TaskCanceledException();
                                 }
 
+                                // read the stream
                                 int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
                                 var readString = new string(buffer)[..charsRead];
+
+                                // calculate delta between last read and current read
+                                var readDeltaValue = DateTime.UtcNow.Subtract(streamLastReadTime);
+                                readDelta?.InvokeOnMainThread(readDeltaValue);
+                                // update read time
+                                streamLastReadTime = DateTime.UtcNow;
+
 
                                 /*
                                      On some platform the message might be returned in chunks. 
@@ -427,6 +440,7 @@ namespace ApiClient.Runtime
                                         false));
                                 }
 
+                                // process matches
                                 if (matches != null && matches.Count > 0)
                                 {
                                     for (int i = 0; i < matches.Count; i++)
@@ -489,7 +503,7 @@ namespace ApiClient.Runtime
                                 }
                                 else
                                 {
-                                    // handle invalid string
+                                    // handle no matches
                                     OnStreamResponse?.InvokeOnMainThread(
                                         await _middleware.ProcessResponse(
                                             new ParsingErrorHttpResponse(
@@ -567,7 +581,7 @@ namespace ApiClient.Runtime
             try
             {
                 await _retryPolicy.ExecuteAsync(async (c, ct) =>
-                {                    
+                {
                     await _middleware.ProcessRequest(graphQLRequest, false);
 
                     var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);

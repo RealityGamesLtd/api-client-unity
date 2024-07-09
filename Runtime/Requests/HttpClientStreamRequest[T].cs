@@ -83,7 +83,7 @@ namespace ApiClient.Runtime.Requests
             _apiClient = apiClient;
         }
 
-        public async Task Send(Action<IHttpResponse> OnStreamResponse)
+        public async Task Send(Action<IHttpResponse> OnStreamResponse, Action<TimeSpan> readDelta)
         {
             if (IsSent)
             {
@@ -92,7 +92,7 @@ namespace ApiClient.Runtime.Requests
 
             IsSent = true;
 
-            await _apiClient.SendStreamRequest<T>(this, OnStreamResponse);
+            await _apiClient.SendStreamRequest<T>(this, OnStreamResponse, readDelta);
         }
     }
 }
