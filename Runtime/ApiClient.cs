@@ -13,6 +13,7 @@ using Polly.Retry;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
 using UnityEngine.AI;
+using System.Threading;
 
 namespace ApiClient.Runtime
 {
@@ -22,6 +23,7 @@ namespace ApiClient.Runtime
         private readonly HttpClient _httpClient;
         private readonly IApiClientMiddleware _middleware;
         private readonly int _streamBufferSize = 4096;
+        private readonly int _streamReadDeltaUpdateTime = 1000;
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
@@ -63,6 +65,8 @@ namespace ApiClient.Runtime
                 // create graphQLClient using httpClient instance
                 _graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), _httpClient);
             }
+
+            _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
         }
 
         /// <summary>
@@ -351,6 +355,7 @@ namespace ApiClient.Runtime
         /// <see cref="AbortedHttpResponse"/> or 
         /// <see cref="TimeoutHttpResponse"/> or 
         /// <see cref="NetworkErrorHttpResponse"/></param>
+        /// <param name="readDelta">Callback action to notify about read delta times</param>
         /// <returns>Request Task</returns>
         public async Task SendStreamRequest<T>(
             HttpClientStreamRequest<T> request,
@@ -358,6 +363,7 @@ namespace ApiClient.Runtime
             Action<TimeSpan> readDelta)
         {
             DateTime streamLastReadTime = DateTime.UtcNow;
+            var updateReadDeltaValueCts = new CancellationTokenSource();
 
             try
             {
@@ -377,6 +383,9 @@ namespace ApiClient.Runtime
                         // run on non UI thread
                         await Task.Run(async () =>
                         {
+                            // start task that will update read delta regularly
+                            _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token);
+
                             char[] buffer = new char[_streamBufferSize];
                             string partialMessage = "";
 
@@ -391,12 +400,8 @@ namespace ApiClient.Runtime
                                 int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
                                 var readString = new string(buffer)[..charsRead];
 
-                                // calculate delta between last read and current read
-                                var readDeltaValue = DateTime.UtcNow.Subtract(streamLastReadTime);
-                                readDelta?.InvokeOnMainThread(readDeltaValue);
                                 // update read time
                                 streamLastReadTime = DateTime.UtcNow;
-
 
                                 /*
                                      On some platform the message might be returned in chunks. 
@@ -518,7 +523,8 @@ namespace ApiClient.Runtime
                                 }
                             }
                             while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
-                        }, request.CancellationToken).ContinueWith(c => { }, request.CancellationToken);
+                        }, 
+                        request.CancellationToken).ContinueWith(c => { }, request.CancellationToken);
                     };
                 }
                 else
@@ -559,6 +565,26 @@ namespace ApiClient.Runtime
                     new NetworkErrorHttpResponse(e.Message, request.RequestMessage.RequestUri),
                     request.RequestId,
                     true));
+            }
+            finally
+            {
+                updateReadDeltaValueCts?.Cancel();
+            }
+        }
+
+        private async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                // calculate delta between last read and current read
+                var readDeltaValue = DateTime.UtcNow.Subtract(streamLastRead());
+                readDelta?.InvokeOnMainThread(readDeltaValue);
+
+                try
+                {
+                    await Task.Delay(_streamReadDeltaUpdateTime, ct);
+                }
+                catch (OperationCanceledException) { }
             }
         }
 

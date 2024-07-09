@@ -38,5 +38,12 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <value></value>
         public Version Version { get; set; } = HttpVersion.Version20;
+
+        /// <summary>
+        /// How often update & notify about stream read delta
+        /// In Miliseconds
+        /// </summary>
+        /// <value></value>
+        public int StreamReadDeltaUpdateTime { get; set; } = 1000;
     }
 }
