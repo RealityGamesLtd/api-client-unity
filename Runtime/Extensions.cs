@@ -16,6 +16,14 @@ namespace ApiClient.Runtime
             });
         }
 
+        public static void InvokeOnMainThread<T>(this Action<T> callback, T value)
+        {
+            ThreadDispatcher.RunOnMainThread(() =>
+            {
+                callback?.Invoke(value);
+            });
+        }
+
         /// <summary>
         /// Helper method to get single value header.
         /// </summary>
