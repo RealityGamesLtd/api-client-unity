@@ -39,5 +39,10 @@ namespace ApiClient.Runtime.HttpResponses
         public HttpResponseHeaders Headers { get; private set; }
         public HttpContentHeaders ContentHeaders { get; private set; }
         bool ICachedHttpResponse.IsFromCache { get; set; }
+
+        public long ContentSize()
+        {
+            return 1;
+        }
     }
 }
