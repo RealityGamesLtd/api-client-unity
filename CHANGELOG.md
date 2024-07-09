@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2024-07-09
+### Add
+- Read delta for stream
+
 ## [1.0.8] - 2024-03-21
 ### Improvement
 - Added `headers` argument in ApiClientConnection helper methods
