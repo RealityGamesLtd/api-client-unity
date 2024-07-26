@@ -428,7 +428,6 @@ namespace ApiClient.Runtime
                                 MatchCollection matches = null;
                                 try
                                 {
-                                    readString = Regex.Unescape(readString);
                                     matches = Regex.Matches(readString, regexPattern, RegexOptions.Multiline);
                                 }
                                 catch (Exception ex)
