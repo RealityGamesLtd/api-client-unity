@@ -184,8 +184,10 @@ namespace ApiClient.Runtime
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
-                                    responseMessage.Headers,
-                                    responseMessage.Content.Headers,
+                                    null,
+                                    null,
+                                    // responseMessage.Headers,
+                                    // responseMessage.Content.Headers,
                                     body,
                                     reqest.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
@@ -194,8 +196,10 @@ namespace ApiClient.Runtime
 
                         response ??= new HttpResponse<E>(
                                 content,
-                                responseMessage.Headers,
-                                responseMessage.Content.Headers,
+                                null,
+                                null,
+                                // responseMessage.Headers,
+                                // responseMessage.Content.Headers,
                                 body,
                                 reqest.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
@@ -262,7 +266,7 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
-                        var headers = responseMessage.Headers;
+                        // var headers = responseMessage.Headers;
                         T content = default;
                         E error = default;
 
@@ -279,8 +283,10 @@ namespace ApiClient.Runtime
                                 // return parsing error from content parsing so we can process it later
                                 response = new ParsingErrorHttpResponse(
                                     ex.ToString(),
-                                    responseMessage.Headers,
-                                    responseMessage.Content.Headers,
+                                    null,
+                                    null,
+                                    // responseMessage.Headers,
+                                    // responseMessage.Content.Headers,
                                     body,
                                     request.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
@@ -311,10 +317,12 @@ namespace ApiClient.Runtime
                         response ??= new HttpResponse<T, E>(
                                 content,
                                 error,
-                                responseMessage.Headers,
-                                responseMessage.Content.Headers,
-                                body,
-                                request.RequestMessage.RequestUri,
+                                null,
+                                null,
+                                // responseMessage.Headers,
+                                // responseMessage.Content.Headers,
+                                null,
+                                null,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
@@ -334,7 +342,8 @@ namespace ApiClient.Runtime
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, false);
+                // }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {

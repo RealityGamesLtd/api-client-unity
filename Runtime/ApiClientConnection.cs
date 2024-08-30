@@ -97,7 +97,14 @@ namespace ApiClient.Runtime
                     Version = _httpVersion
                 },
                 _apiClient,
-                ct)
+                ct,
+                () => this.CreateGet<T, E>(
+                    url,
+                    ct,
+                    authentication,
+                    headers,
+                    useDefaultHeaders
+                ))
             {
                 Authentication = authentication,
                 Headers = headers,
@@ -173,7 +180,14 @@ namespace ApiClient.Runtime
                     Version = _httpVersion
                 },
                 _apiClient,
-                ct)
+                ct,
+                () => this.CreatePost<T, E>(
+                    url, 
+                    jsonBody, 
+                    ct, 
+                    authentication, 
+                    headers, 
+                    useDefaultHeaders))
             {
                 Authentication = authentication,
                 Headers = headers,
@@ -250,7 +264,15 @@ namespace ApiClient.Runtime
                     Version = _httpVersion
                 },
                 _apiClient,
-                ct)
+                ct,
+                () => this.CreatePut<T, E>(
+                    url,
+                    jsonBody,
+                    ct,
+                    authentication,
+                    headers,
+                    useDefaultHeaders
+                ))
             {
                 Authentication = authentication,
                 Headers = headers,
@@ -321,7 +343,14 @@ namespace ApiClient.Runtime
                     Version = _httpVersion
                 },
                 _apiClient,
-                ct)
+                ct,
+                () => this.CreateDelete<T, E>(
+                    url,
+                    ct,
+                    authentication,
+                    headers,
+                    useDefaultHeaders
+                ))
             {
                 Authentication = authentication,
                 Headers = headers,

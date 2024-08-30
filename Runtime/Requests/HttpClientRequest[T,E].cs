@@ -71,16 +71,22 @@ namespace ApiClient.Runtime.Requests
         }
 
         private readonly ApiClient _apiClient;
+        private readonly Func<HttpClientRequest<T, E>> _recreateFunc;
 
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientRequest(HttpRequestMessage httpRequestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientRequest(
+            HttpRequestMessage httpRequestMessage,
+            ApiClient apiClient,
+            CancellationToken ct,
+            Func<HttpClientRequest<T, E>> recreateFunc)
         {
             RequestMessage = httpRequestMessage;
             CancellationToken = ct;
             Uri = httpRequestMessage.RequestUri;
             _apiClient = apiClient;
+            _recreateFunc = recreateFunc;
         }
 
         public async Task<IHttpResponse> Send()
@@ -96,14 +102,20 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientRequest<T, E> RecreateWithHttpRequestMessage()
         {
-            var recreatedHttpRequestMessage = new HttpClientRequest<T, E>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
-            {
-                Authentication = this.Authentication,
-                RequestId = Guid.NewGuid().ToString()
-            };
-
-            return recreatedHttpRequestMessage;
+            RequestMessage.Dispose();
+            return _recreateFunc?.Invoke();
         }
+
+        // public HttpClientRequest<T, E> RecreateWithHttpRequestMessage()
+        // {
+        //     var recreatedHttpRequestMessage = new HttpClientRequest<T, E>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
+        //     {
+        //         Authentication = this.Authentication,
+        //         RequestId = Guid.NewGuid().ToString()
+        //     };
+
+        //     return recreatedHttpRequestMessage;
+        // }
 
         private HttpRequestMessage RecreateRequestMessage(HttpRequestMessage req)
         {
@@ -111,9 +123,13 @@ namespace ApiClient.Runtime.Requests
                 req.Method,
                 req.RequestUri)
             {
-                Content = req.Content,
+                // Content = req.Content,
+                Content = new StringContent("", System.Text.Encoding.UTF8, "application/json"),
                 Version = req.Version
             };
+
+            // request.RequestMessage.Content = new StringContent(req.Content, System.Text.Encoding.UTF8, "application/json");
+
 
             var headers = req.Headers;
 
@@ -127,6 +143,9 @@ namespace ApiClient.Runtime.Requests
             {
                 httpRequestMessage.Properties.Add(kv.Key, kv.Value);
             }
+
+            req.Dispose();
+
             return httpRequestMessage;
         }
     }
