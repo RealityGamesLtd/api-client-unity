@@ -94,23 +94,11 @@ namespace ApiClientExample
 
         private void LogResponse(IHttpResponse response, string requestId)
         {
-            // // get content length in bytes
-            // var contentLength = response.ContentHeaders?.ContentLength;
-            // var contentLengthValue = contentLength.HasValue ? contentLength.ToString() : "-";
-
-            // Debug.Log($"RequestId: {requestId}, Url: {response.RequestUri}, Size: {contentLengthValue} bytes");
-
-
-
             if (response.IsAborted)
             {
                 // ommit aborted
                 return;
             }
-
-            // get content length in bytes
-            // var contentLength = response.ContentHeaders?.ContentLength;
-
 
             bool isFrontEndError = response.IsContentParsingError;
 

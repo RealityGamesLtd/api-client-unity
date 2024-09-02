@@ -260,7 +260,6 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
-                        // var headers = responseMessage.Headers;
                         T content = default;
                         E error = default;
 

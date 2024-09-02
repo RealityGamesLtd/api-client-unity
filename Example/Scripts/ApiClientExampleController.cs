@@ -64,6 +64,7 @@ namespace ApiClientExample
             //     JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
             //     _cts.Token,
             //     authentication);
+
             var httpResponse = await request.Send();
             var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);
 
@@ -71,8 +72,6 @@ namespace ApiClientExample
             {
                 var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>;
                 Debug.Log("Success");
-                // Debug.Log(responseContent.Content.response.playerId);
-                // responseText.text = responseContent.Content.response.playerId;
             }
             else
             {
