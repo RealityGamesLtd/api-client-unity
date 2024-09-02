@@ -235,5 +235,8 @@ https://github.com/graphql-dotnet/graphql-client
 ### Polly
 https://github.com/App-vNext/Polly
 
+### Polly WaitAndRetry
+https://github.com/Polly-Contrib/Polly.Contrib.WaitAndRetry
+
 ### Newtonsoft.Json-for-Unity
 https://github.com/jilleJr/Newtonsoft.Json-for-Unity
