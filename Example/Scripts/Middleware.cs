@@ -109,8 +109,8 @@ namespace ApiClientExample
             }
 
             // get content length in bytes
-            var contentLength = response.ContentHeaders?.ContentLength;
-            var contentLengthValue = contentLength.HasValue ? contentLength.ToString() : "-";
+            // var contentLength = response.ContentHeaders?.ContentLength;
+
 
             bool isFrontEndError = response.IsContentParsingError;
 
@@ -153,7 +153,12 @@ namespace ApiClientExample
             }
 
             stringBuilder.Append($"\nurl: \"{response.RequestUri}\", ");
-            stringBuilder.Append($"\ncontentSize: \"{contentLengthValue} bytes\", ");
+
+            if (response.ContentHeaders?.TryGetValue("Content-Length", out string contentLength) ?? false)
+            {
+                var contentLengthValue = string.IsNullOrEmpty(contentLength) ? contentLength.ToString() : "-";
+                stringBuilder.Append($"\ncontentSize: \"{contentLengthValue} bytes\", ");
+            }
 
             if (!string.IsNullOrEmpty(responseBody))
             {

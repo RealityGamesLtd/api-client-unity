@@ -64,9 +64,7 @@ namespace ApiClient.Runtime.Requests
             }
             get
             {
-                return RequestMessage.Headers.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(";", x.Value));
+                return RequestMessage.Headers.ToHeadersDictionary();
             }
         }
 
@@ -104,49 +102,6 @@ namespace ApiClient.Runtime.Requests
         {
             RequestMessage.Dispose();
             return _recreateFunc?.Invoke();
-        }
-
-        // public HttpClientRequest<T, E> RecreateWithHttpRequestMessage()
-        // {
-        //     var recreatedHttpRequestMessage = new HttpClientRequest<T, E>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
-        //     {
-        //         Authentication = this.Authentication,
-        //         RequestId = Guid.NewGuid().ToString()
-        //     };
-
-        //     return recreatedHttpRequestMessage;
-        // }
-
-        private HttpRequestMessage RecreateRequestMessage(HttpRequestMessage req)
-        {
-            HttpRequestMessage httpRequestMessage = new(
-                req.Method,
-                req.RequestUri)
-            {
-                // Content = req.Content,
-                Content = new StringContent("", System.Text.Encoding.UTF8, "application/json"),
-                Version = req.Version
-            };
-
-            // request.RequestMessage.Content = new StringContent(req.Content, System.Text.Encoding.UTF8, "application/json");
-
-
-            var headers = req.Headers;
-
-            foreach (KeyValuePair<string, IEnumerable<string>> kv in headers)
-            {
-                httpRequestMessage.Headers.Add(kv.Key, kv.Value);
-            }
-
-            var properties = req.Properties;
-            foreach (KeyValuePair<string, object> kv in properties)
-            {
-                httpRequestMessage.Properties.Add(kv.Key, kv.Value);
-            }
-
-            req.Dispose();
-
-            return httpRequestMessage;
         }
     }
 }

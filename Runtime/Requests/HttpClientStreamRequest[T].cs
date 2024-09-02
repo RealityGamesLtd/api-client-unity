@@ -64,9 +64,7 @@ namespace ApiClient.Runtime.Requests
             }
             get
             {
-                return RequestMessage.Headers.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(";", x.Value));
+                return RequestMessage.Headers.ToHeadersDictionary();
             }
         }
 

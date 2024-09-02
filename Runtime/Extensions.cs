@@ -45,5 +45,12 @@ namespace ApiClient.Runtime
             }
             return false;
         }
+
+        public static  Dictionary<string, string> ToHeadersDictionary(this HttpHeaders headers)
+        {
+            return headers.ToDictionary(
+                                x => x.Key,
+                                x => string.Join(";", x.Value));
+        }
     }
 }
