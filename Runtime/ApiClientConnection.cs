@@ -511,5 +511,23 @@ namespace ApiClient.Runtime
 
             return request;
         }
+
+        public HttpClientByteArrayRequest CreateGetByteArrayRequest(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true)
+        {
+            var request = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct)
+            {
+                Authentication = authentication,
+                Headers = headers,
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+            };
+
+            return request;
+        }
     }
 }

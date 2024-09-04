@@ -32,7 +32,7 @@ namespace ApiClientExample
             }
 
             // simulate delay with each response
-            await Task.Delay(300);
+            // await Task.Delay(300);
 
             return response;
         }
