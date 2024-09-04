@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
+using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.GraphQLBuilder;
 using ApiClient.Runtime.Requests;
 
@@ -38,7 +39,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true, 
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -72,7 +74,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest<E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -101,7 +104,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -512,7 +516,13 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientByteArrayRequest CreateGetByteArrayRequest(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true)
+        public HttpClientByteArrayRequest CreateGetByteArrayRequest(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null, 
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
