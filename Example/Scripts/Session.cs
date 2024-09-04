@@ -5,6 +5,7 @@ using System.Net.Http;
 using ApiClient.Runtime;
 using ApiClient.Runtime.HttpResponses;
 using Polly;
+using Polly.Contrib.WaitAndRetry;
 
 namespace ApiClientExample
 {
@@ -53,11 +54,11 @@ namespace ApiClientExample
                     })
                     // Exponential Backoff
                     .WaitAndRetryAsync(
-                        3,
-                        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                        (response, timeSpan) =>
+                        Backoff.DecorrelatedJitterBackoffV2(medianFirstRetryDelay: TimeSpan.FromSeconds(1), retryCount: 2),
+                        (response, delay, retryAttempt, context) =>
                         {
                             // Logic to be executed before each retry
+                            context["RetryAttempt"] = retryAttempt;
                         }),
             });
     }

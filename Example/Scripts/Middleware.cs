@@ -1,3 +1,4 @@
+using System.Text;
 using System.Threading.Tasks;
 using ApiClient.Runtime;
 using ApiClient.Runtime.HttpResponses;
@@ -10,7 +11,10 @@ namespace ApiClientExample
     {
         public async Task ProcessRequest(IHttpRequest request, bool isResponseWithBackoff = false)
         {
-
+            if (!isResponseWithBackoff)
+            {
+                LogRequest(request);
+            }
         }
 
         public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool isResponseWithBackoff = false)
@@ -70,13 +74,94 @@ namespace ApiClientExample
             }
         }
 
+        private async void LogRequest(IHttpRequest request)
+        {
+            StringBuilder stringBuilder = new();
+            stringBuilder.Append($"Request -> ");
+            stringBuilder.Append($"requestId: \"{request.RequestId}\", ");
+            stringBuilder.Append($"\nurl: \"{request.Uri}\", ");
+            stringBuilder.Append($"\nDetails: \n\"{request.RequestMessage}\"");
+
+            if (request.RequestMessage.Content != null)
+            {
+                var content = await request.RequestMessage.Content.ReadAsStringAsync();
+                stringBuilder.Append($"\nBody: \n\"{content}\"");
+            }
+
+            // Log request details
+            Debug.Log(stringBuilder.ToString());
+        }
+
         private void LogResponse(IHttpResponse response, string requestId)
         {
-            // get content length in bytes
-            var contentLength = response.ContentHeaders?.ContentLength;
-            var contentLengthValue = contentLength.HasValue ? contentLength.ToString() : "-";
+            if (response.IsAborted)
+            {
+                // ommit aborted
+                return;
+            }
 
-            Debug.Log($"Request: {requestId}, Url: {response.RequestUri}, Size: {contentLengthValue} bytes");
+            bool isFrontEndError = response.IsContentParsingError;
+
+            string statusCodeName = "";
+            if (response is IHttpResponseStatusCode responseWithStatusCode)
+            {
+                statusCodeName = $"{responseWithStatusCode.StatusCode} - {(int)responseWithStatusCode.StatusCode}";
+            }
+
+            string responseBody = "";
+            if (response is IHttpResponseBody responseWithBody)
+            {
+                responseBody = responseWithBody.Body;
+            }
+
+            // Build log message
+            StringBuilder stringBuilder = new();
+            stringBuilder.Append($"Response -> ");
+
+            stringBuilder.Append($"requestId: \"{requestId}\", ");
+
+            if (!string.IsNullOrEmpty(statusCodeName))
+            {
+                stringBuilder.Append($"statusCode: \"{statusCodeName}\", ");
+            }
+
+            if (response.IsContentParsingError)
+            {
+                if (response is ParsingErrorHttpResponse parsingErrorHttpResponse)
+                {
+                    stringBuilder.Append($"errorMessage: \"{parsingErrorHttpResponse.Message}\", ");
+                }
+            }
+            else if (response.IsNetworkError)
+            {
+                if (response is NetworkErrorHttpResponse networkErrorHttpResponse)
+                {
+                    stringBuilder.Append($"errorMessage: \"{networkErrorHttpResponse.Message}\", ");
+                }
+            }
+
+            stringBuilder.Append($"\nurl: \"{response.RequestUri}\", ");
+
+            if (response.ContentHeaders?.TryGetValue("Content-Length", out string contentLength) ?? false)
+            {
+                var contentLengthValue = string.IsNullOrEmpty(contentLength) ? contentLength.ToString() : "-";
+                stringBuilder.Append($"\ncontentSize: \"{contentLengthValue} bytes\", ");
+            }
+
+            if (!string.IsNullOrEmpty(responseBody))
+            {
+                stringBuilder.Append($"\nbody: \n\"{responseBody}\"");
+            }
+
+            // Log response details
+            if (isFrontEndError)
+            {
+                Debug.LogError(stringBuilder.ToString());
+            }
+            else
+            {
+                Debug.Log(stringBuilder.ToString());
+            }
         }
     }
 }

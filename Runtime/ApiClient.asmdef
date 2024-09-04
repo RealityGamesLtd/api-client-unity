@@ -14,7 +14,8 @@
         "Newtonsoft.Json.dll",
         "GraphQL.Client.Serializer.Newtonsoft.dll",
         "GraphQL.Client.Serializer.SystemTextJson.dll",
-        "Polly.dll"
+        "Polly.dll",
+        "Polly.Contrib.WaitAndRetry.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [],

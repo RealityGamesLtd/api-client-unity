@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Headers;
 
@@ -16,10 +17,10 @@ namespace ApiClient.Runtime.HttpResponses
         {
             Content = content;
             Error = error;
-            Headers = headers;
+            Headers = headers.ToHeadersDictionary();
             RequestUri = uri;
             StatusCode = statusCode;
-            ContentHeaders = contentHeaders;
+            ContentHeaders = contentHeaders.ToHeadersDictionary();
             Body = body;
         }
 
@@ -52,8 +53,8 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsTimeout => false;
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
-        public HttpResponseHeaders Headers { get; private set; }
-        public HttpContentHeaders ContentHeaders { get; private set; }
+        public Dictionary<string, string> Headers { get; private set; }
+        public Dictionary<string, string> ContentHeaders { get; private set; }
 
         /// <summary>
         /// Unprocessed response's body string

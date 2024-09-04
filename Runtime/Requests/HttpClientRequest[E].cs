@@ -64,23 +64,27 @@ namespace ApiClient.Runtime.Requests
             }
             get
             {
-                return RequestMessage.Headers.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(";", x.Value));
+                return RequestMessage.Headers.ToHeadersDictionary();
             }
         }
 
         private readonly ApiClient _apiClient;
+        private readonly Func<HttpClientRequest<E>> _recreateFunc;
 
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientRequest(HttpRequestMessage httpRequestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientRequest(
+            HttpRequestMessage httpRequestMessage,
+            ApiClient apiClient,
+            CancellationToken ct,
+            Func<HttpClientRequest<E>> recreateFunc)
         {
             RequestMessage = httpRequestMessage;
             CancellationToken = ct;
             Uri = httpRequestMessage.RequestUri;
             _apiClient = apiClient;
+            _recreateFunc = recreateFunc;
         }
 
         public async Task<IHttpResponse> Send()
@@ -96,38 +100,8 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientRequest<E> RecreateWithHttpRequestMessage()
         {
-            var recreatedHttpRequestMessage = new HttpClientRequest<E>(RecreateRequestMessage(this.RequestMessage), _apiClient, CancellationToken)
-            {
-                Authentication = this.Authentication,
-                RequestId = Guid.NewGuid().ToString()
-            };
-
-            return recreatedHttpRequestMessage;
-        }
-
-        private HttpRequestMessage RecreateRequestMessage(HttpRequestMessage req)
-        {
-            HttpRequestMessage httpRequestMessage = new(
-                req.Method,
-                req.RequestUri)
-            {
-                Content = req.Content,
-                Version = req.Version
-            };
-
-            var headers = req.Headers;
-
-            foreach (KeyValuePair<string, IEnumerable<string>> kv in headers)
-            {
-                httpRequestMessage.Headers.Add(kv.Key, kv.Value);
-            }
-
-            var properties = req.Properties;
-            foreach (KeyValuePair<string, object> kv in properties)
-            {
-                httpRequestMessage.Properties.Add(kv.Key, kv.Value);
-            }
-            return httpRequestMessage;
+            RequestMessage.Dispose();
+            return _recreateFunc?.Invoke();
         }
     }
 }

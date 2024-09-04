@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
-using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -42,8 +42,8 @@ namespace ApiClient.Runtime.HttpResponses
         bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout;
 
         Uri RequestUri { get; }
-        HttpResponseHeaders Headers { get; }
-        HttpContentHeaders ContentHeaders { get; }
+        Dictionary<string, string> Headers { get; }
+        Dictionary<string, string> ContentHeaders { get; }
     }
 
     public interface IHttpResponseStatusCode

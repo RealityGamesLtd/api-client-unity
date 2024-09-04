@@ -1,5 +1,5 @@
 using System;
-using System.Net.Http.Headers;
+using System.Collections.Generic;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -12,8 +12,8 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsTimeout => false;
         public bool IsContentParsingError => false;
         public Uri RequestUri { get; private set; }
-        public HttpResponseHeaders Headers { get; private set; } = null;
-        public HttpContentHeaders ContentHeaders { get; private set; } = null;
+        public Dictionary<string, string> Headers { get; private set; } = null;
+        public Dictionary<string, string> ContentHeaders { get; private set; } = null;
 
         public string Message { get; }
 

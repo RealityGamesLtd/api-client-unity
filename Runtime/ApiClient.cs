@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,7 +11,6 @@ using Polly;
 using Polly.Retry;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
-using UnityEngine.AI;
 using System.Threading;
 
 namespace ApiClient.Runtime
@@ -262,7 +260,6 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
-                        var headers = responseMessage.Headers;
                         T content = default;
                         E error = default;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Headers;
 
@@ -14,8 +15,8 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsTimeout => false;
         public Uri RequestUri { get; private set; }
         public string Message { get; }
-        public HttpResponseHeaders Headers { get; private set; }
-        public HttpContentHeaders ContentHeaders { get; private set; }
+        public Dictionary<string, string> Headers { get; private set; }
+        public Dictionary<string, string> ContentHeaders { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public string Body { get; private set; }
 
@@ -23,17 +24,17 @@ namespace ApiClient.Runtime.HttpResponses
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
         {
             Message = errorMessage;
-            Headers = headers;
+            Headers = headers.ToHeadersDictionary();
             RequestUri = requestUri;
             StatusCode = statusCode;
-            ContentHeaders = contentHeaders;
+            ContentHeaders = contentHeaders.ToHeadersDictionary();
             Body = body;
         }
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri)
         {
             Message = errorMessage;
-            Headers = headers;
+            Headers = headers.ToHeadersDictionary();
             RequestUri = requestUri;
         }
     }

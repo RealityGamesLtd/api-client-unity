@@ -52,15 +52,26 @@ namespace ApiClientExample
             responseView.SetActive(true);
             responseText.text = "";
 
-            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
+                "https://httpstat.us/500", 
+                JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
+                _cts.Token);
+
+            // var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkxYTI3OS05MjI5LTQ3ZjQtYzFlYS00NjVkZmZiODQ2ZjUiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyNTAxNjQ2MiwiaWF0IjoxNzI1MDEyODYyfQ.0RpRFFmX4qKMCU30YfLpfxPXU7oqc_sNqEYVOa_l0oURStvLoawJa80v7sn00LYzW6qVPegR9Nkyds4ZVFqmxO--5ABtBBefCjqkGivgbE-vgh4nZDz2EvN0q9H91I3D1Nl0uxpOsPczwXw3Q8rHT6nQADeUjPDZ5LPfDBI4J_jrWPg_-HaAHf8iSpjH1DfIiCHLhSYya_s7UiPjQ6XyfR2Zosw2OtAXfUQrGA4GeHIwlJPy6CBNMlU3ff1Hj3SRnrtxR1d7wyuEAOCAGTR2ZW8t4Qz3jY1rSq4u82AZnCNHl5UYm6M3A1ZRmGVuv_VnIgwdSR8z68nAFZAhy_3HCXcdCNO_LyGzzrBajEcBh5S_R-mzKjjy5kEAUmYcDAarbBcsHycU_a73YDNkN_jPNw2xvl_g1Vj0ZqO4rNwHNgGeZaBc5TLFh_PwS5uM3CV83H3mdqNu8tg6aUn1UPu4rMHiM2SSAnYlxPkg6_eE-q4gFOzzOFmPdl6UZWH2eEIbhRFoKhHog9J-Xm7VZY7xGkScZe_j_NJIgulgdbuQHVs9JL-IV9n74zWNm7pPpHOc0U1yDH72pWoPPvKUXKTF_QjaaIEnp4EG7oklcOlIBZHCEn52cL60tO66kKNBHHMgGvhZumTcQ8_rNwaOcRe7dMDTR0P7ox5t5gFNNHfbZQI");
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<Object, ServerErrorResponse>(
+            //     "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+            //     JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
+            //     _cts.Token,
+            //     authentication);
+
             var httpResponse = await request.Send();
             var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);
 
             if (httpResponse.HasNoErrors)
             {
                 var responseContent = httpResponse as HttpResponse<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>;
-                Debug.Log(responseContent.Content.response.playerId);
-                responseText.text = responseContent.Content.response.playerId;
+                Debug.Log("Success");
             }
             else
             {
@@ -266,6 +277,16 @@ namespace ApiClientExample
             public string reason;
             [JsonProperty(Required = Required.AllowNull)]
             public string args;
+        }
+
+        public class RequestMatchmakingPostData
+        {
+            public bool refresh;
+
+            public RequestMatchmakingPostData(bool refresh)
+            {
+                this.refresh = refresh;
+            }
         }
     }
 }
