@@ -310,8 +310,8 @@ namespace ApiClient.Runtime
                                 error,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
-                                null,
-                                null,
+                                body,
+                                request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
