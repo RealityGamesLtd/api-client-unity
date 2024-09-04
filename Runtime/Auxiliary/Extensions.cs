@@ -79,7 +79,7 @@ namespace ApiClient.Runtime
         public static bool GetHeader(this HttpResponseHeaders httpResponseHeaders, string name, out string headerValue)
         {
             headerValue = null;
-            if (httpResponseHeaders.TryGetValues(name, out IEnumerable<string> headerValuesValues))
+            if (httpResponseHeaders?.TryGetValues(name, out IEnumerable<string> headerValuesValues) ?? false)
             {
                 // we are expecting only one value here
                 if (headerValuesValues != null && headerValuesValues.Count() == 1)
@@ -89,6 +89,13 @@ namespace ApiClient.Runtime
                 }
             }
             return false;
+        }
+
+        public static Dictionary<string, string> ToHeadersDictionary(this HttpHeaders headers)
+        {
+            return headers?.ToDictionary(
+                                x => x.Key,
+                                x => string.Join(";", x.Value));
         }
     }
 }
