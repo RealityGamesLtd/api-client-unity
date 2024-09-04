@@ -69,7 +69,7 @@ namespace ApiClient.Runtime.HttpResponses
         {
             // assume the content will have the same size as body.
             // this doesn't have to be the exact value
-            return Body.Length * sizeof(char) * 2; 
+            return Body != null ? Body.Length * sizeof(char) * 2 : 1; 
         }
     }
 }
