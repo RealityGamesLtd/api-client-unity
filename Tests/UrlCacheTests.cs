@@ -133,6 +133,59 @@ namespace Tests
             Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
         }
 
+        [UnityTest]
+        [Author("Mateusz Młynek")]
+        [Description(@"Check if force expire works properly. Make a request, cache response for 1s, 
+                        immediately make another attempt which should be from cache, then make another request
+                        with force expire.")]
+        public IEnumerator ForceExpiration()
+        {
+            // REQUEST NO 1
+            // create request
+            var request = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
+                null,
+                new System.Threading.CancellationTokenSource().Token);
+
+            // 200 response, but don't cache
+            var response = urlCache.Process(
+                request,
+                new CachePolicy() { Expiration = TimeSpan.FromSeconds(60) }, // cache for one second
+                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+
+            // That response shouldn't be from cache
+            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+
+            // At this point we have cached response which should be returned when we make this request again.
+
+            // REQUEST NO 2
+            // simulate making new request for the same Uri
+            response = urlCache.Process(
+                request = request.RecreateWithHttpRequestMessage(),
+                new CachePolicy() { ForceExpire = true }, // mark as force expire
+                GetResponseFor(request.Uri, HttpStatusCode.NotFound)).Result;
+
+            // That response should not be from cache because we ForceExpire
+            // The previous response should be dropped, as there is an error the new one shouldn't be cached.
+            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsTrue((response as IHttpResponseStatusCode).StatusCode == HttpStatusCode.NotFound);
+
+            // REQUEST NO 3
+            // simulate making new request for the same Uri
+            response = urlCache.Process(
+                request = request.RecreateWithHttpRequestMessage(),
+                null,
+                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+
+            // That response shouldn't be from cache
+            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            // And it should have OK status code
+            Assert.IsTrue((response as IHttpResponseStatusCode).StatusCode == HttpStatusCode.OK);
+
+            // wait for over one second for the cache to expire
+            yield return new WaitForSecondsRealtime(2);
+        }
+
         /// <summary>
         /// Helper method that will prepare response object
         /// </summary>

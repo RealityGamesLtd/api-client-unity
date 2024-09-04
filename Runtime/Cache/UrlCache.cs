@@ -55,9 +55,10 @@ namespace ApiClient.Runtime.Cache
             }
 
             // override
-            if (cachePolicy != null && cachePolicy.OverridePrevious)
+            if (cachePolicy != null && cachePolicy.ForceExpire)
             {
                 response = null;
+                Invalidate(request.Uri.ToString());
             }
 
             // make request

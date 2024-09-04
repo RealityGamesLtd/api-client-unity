@@ -12,6 +12,6 @@ namespace ApiClient.Runtime.Cache
         /// <summary>
         /// Should ignore <see cref="Expiration"/> and override previously stored data
         /// </summary>
-        public bool OverridePrevious { get; set; } = false;
+        public bool ForceExpire { get; set; } = false;
     }
 }
