@@ -144,7 +144,7 @@ namespace ApiClientExample
 
             if (response.ContentHeaders?.TryGetValue("Content-Length", out string contentLength) ?? false)
             {
-                var contentLengthValue = string.IsNullOrEmpty(contentLength) ? contentLength.ToString() : "-";
+                var contentLengthValue = !string.IsNullOrEmpty(contentLength) ? contentLength.ToString() : "-";
                 stringBuilder.Append($"\ncontentSize: \"{contentLengthValue} bytes\", ");
             }
 

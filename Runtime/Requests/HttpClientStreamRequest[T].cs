@@ -90,7 +90,7 @@ namespace ApiClient.Runtime.Requests
 
             IsSent = true;
 
-            await _apiClient.SendStreamRequest<T>(this, OnStreamResponse, readDelta);
+            await _apiClient.SendStreamRequest(this, OnStreamResponse, readDelta);
         }
     }
 }

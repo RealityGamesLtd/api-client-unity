@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime.Requests
@@ -76,6 +77,8 @@ namespace ApiClient.Runtime.Requests
 
         private readonly ApiClient _apiClient;
         private readonly Func<HttpClientRequest> _recreateFunc;
+        private readonly CachePolicy _cachePolicy;
+        private readonly UrlCache _urlCache;
 
         private AuthenticationHeaderValue _authentication;
 
@@ -83,6 +86,8 @@ namespace ApiClient.Runtime.Requests
             HttpRequestMessage httpRequestMessage, 
             ApiClient apiClient, 
             CancellationToken ct,
+            UrlCache urlCache,
+            CachePolicy cachePolicy,
             Func<HttpClientRequest> recreateFunc)
         {
             RequestMessage = httpRequestMessage;
@@ -90,6 +95,8 @@ namespace ApiClient.Runtime.Requests
             Uri = httpRequestMessage.RequestUri;
             _apiClient = apiClient;
             _recreateFunc = recreateFunc;
+            _urlCache = urlCache;
+            _cachePolicy = cachePolicy;
         }
 
         public async Task<IHttpResponse> Send()
@@ -100,7 +107,13 @@ namespace ApiClient.Runtime.Requests
             }
 
             IsSent = true;
-            return await _apiClient.SendHttpRequest(this);
+
+            var response = await _urlCache.Process(
+                this,
+                _cachePolicy,
+                () => _apiClient.SendHttpRequest(this));
+
+            return response;
         }
 
         public HttpClientRequest RecreateWithHttpRequestMessage()

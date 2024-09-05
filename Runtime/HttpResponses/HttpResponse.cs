@@ -41,7 +41,7 @@ namespace ApiClient.Runtime.HttpResponses
         public Dictionary<string, string> ContentHeaders { get; private set; }
         bool ICachedHttpResponse.IsFromCache { get; set; }
 
-        public long ContentSize()
+        public long CacheContentSize()
         {
             return 1;
         }

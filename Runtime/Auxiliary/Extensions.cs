@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Threading;
 using ApiClient.Runtime.HttpResponses;
 using UnityEngine;
 
@@ -9,12 +10,9 @@ namespace ApiClient.Runtime
 {
     public static class Extensions
     {
-        public static void InvokeOnMainThread<T>(this Action<T> callback, T value)
+        public static void PostOnMainThread<T>(this Action<T> callback, T value, SynchronizationContext context)
         {
-            ThreadDispatcher.RunOnMainThread(() =>
-            {
-                callback?.Invoke(value);
-            });
+            context.Post((o) => callback?.Invoke(value), null);
         }
 
         /// <summary>

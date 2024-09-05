@@ -17,7 +17,6 @@ namespace ApiClient.Runtime.Requests
         public HttpRequestMessage RequestMessage { get; }
         public string RequestId { get; private set; } = Guid.NewGuid().ToString();
         public Uri Uri { get; private set; }
-        public CachePolicy CachePolicy { get; set; }
 
         public AuthenticationHeaderValue Authentication
         {
@@ -73,11 +72,34 @@ namespace ApiClient.Runtime.Requests
         }
 
         private readonly ApiClient _apiClient;
+        private readonly Func<HttpClientByteArrayRequest> _recreateFunc;
+        private readonly CachePolicy _cachePolicy;
+        private readonly UrlCache _urlCache;
 
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientByteArrayRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientByteArrayRequest(
+            HttpRequestMessage requestMessage,
+            ApiClient apiClient,
+            CancellationToken ct,
+            UrlCache urlCache,
+            CachePolicy cachePolicy,
+            Func<HttpClientByteArrayRequest> recreateFunc)
+        {
+            RequestMessage = requestMessage;
+            CancellationToken = ct;
+            Uri = requestMessage.RequestUri;
+            _apiClient = apiClient;
+            _recreateFunc = recreateFunc;
+            _urlCache = urlCache;
+            _cachePolicy = cachePolicy;
+        }
+
+        public HttpClientByteArrayRequest(
+            HttpRequestMessage requestMessage,
+            ApiClient apiClient,
+            CancellationToken ct)
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
@@ -95,49 +117,15 @@ namespace ApiClient.Runtime.Requests
             IsSent = true;
 
             return await _apiClient.Cache.Process(
-                this, 
-                CachePolicy, 
-                _apiClient.SendByteArrayRequest(this, OnProgressChanged));
+                this,
+                _cachePolicy,
+                () => _apiClient.SendByteArrayRequest(this, OnProgressChanged));
         }
 
         public HttpClientByteArrayRequest RecreateWithHttpRequestMessage()
         {
-            var recreatedHttpRequestMessage = new HttpClientByteArrayRequest(
-                RecreateRequestMessage(this.RequestMessage),
-                _apiClient,
-                CancellationToken)
-            {
-                Authentication = this.Authentication,
-                // generate new unique request id
-                RequestId = Guid.NewGuid().ToString(),
-                CachePolicy = this.CachePolicy
-            };
-
-            return recreatedHttpRequestMessage;
-        }
-
-        private HttpRequestMessage RecreateRequestMessage(HttpRequestMessage req)
-        {
-            HttpRequestMessage httpRequestMessage = new HttpRequestMessage(
-                req.Method,
-                req.RequestUri)
-            {
-                Content = req.Content,
-            };
-
-            var headers = req.Headers;
-
-            foreach (KeyValuePair<string, IEnumerable<string>> kv in headers)
-            {
-                httpRequestMessage.Headers.Add(kv.Key, kv.Value);
-            }
-
-            var properties = req.Properties;
-            foreach (KeyValuePair<string, object> kv in properties)
-            {
-                httpRequestMessage.Properties.Add(kv.Key, kv.Value);
-            }
-            return httpRequestMessage;
+            RequestMessage.Dispose();
+            return _recreateFunc?.Invoke();
         }
     }
 }

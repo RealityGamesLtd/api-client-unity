@@ -13,6 +13,7 @@ using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
 using System.Threading;
 using ApiClient.Runtime.Cache;
+using UnityEngine;
 
 namespace ApiClient.Runtime
 {
@@ -26,6 +27,8 @@ namespace ApiClient.Runtime
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
         private readonly int _byteArrayBufferSize = 4096;
+        private readonly bool _verboseLogging;
+        private readonly SynchronizationContext _syncCtx = new();
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
@@ -59,6 +62,9 @@ namespace ApiClient.Runtime
 
             // assign byte array buffer size
             _byteArrayBufferSize = options.ByteArrayBufferSize;
+
+            // assign verbose logging
+            _verboseLogging = options.VerboseLogging;
 
             if (Uri.IsWellFormedUriString(options.GraphQLClientEndpoint, UriKind.Absolute))
             {
@@ -378,22 +384,30 @@ namespace ApiClient.Runtime
                     // read a stream only when 200 status code was returned
                     if (!responseMessage.IsSuccessStatusCode)
                     {
+                        if (_verboseLogging)
+                        {
+                            Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                        }
+
                         // Handle non 2xx response
-                        return await _middleware.ProcessResponse(new HttpResponse<byte[]>(
+                        response = new HttpResponse<byte[]>(
                             default,
                             responseMessage.Headers,
                             null,
                             null,
                             request.RequestMessage.RequestUri,
-                            responseMessage.StatusCode), request.RequestId, true);
+                            responseMessage.StatusCode);
+                        return response;
+                    }
+
+                    if (_verboseLogging)
+                    {
+                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
                     }
 
                     using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
 
                     var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
-
-                    // update progress
-                    progressCallback?.InvokeOnMainThread(new ByteArrayRequestProgress(0L, contentLength));
 
                     await Task.Run(async () =>
                     {
@@ -415,14 +429,24 @@ namespace ApiClient.Runtime
                             {
                                 // Done!
                                 isMoreToRead = false;
-                                progressCallback?.InvokeOnMainThread(new ByteArrayRequestProgress(totalBytesRead, contentLength));
+
+                                if (_verboseLogging)
+                                {
+                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                                }
+
                                 continue;
                             }
 
                             await memoryStream.WriteAsync(buffer, 0, bytesRead);
                             totalBytesRead += bytesRead;
 
-                            progressCallback?.InvokeOnMainThread(new ByteArrayRequestProgress(totalBytesRead, contentLength));
+                            if (_verboseLogging)
+                            {
+                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLength}.");
+                            }
+
+                            progressCallback?.PostOnMainThread(new(totalBytesRead, contentLength), _syncCtx);
                         }
                         while (isMoreToRead && !ct.IsCancellationRequested);
 
@@ -497,13 +521,14 @@ namespace ApiClient.Runtime
                 if (!responseMessage.IsSuccessStatusCode)
                 {
                     // Handle non 2xx response
-                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(new HttpResponse<T>(
+                    OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(new HttpResponse<T>(
                         default,
                         responseMessage.Headers,
                         null,
                         null,
                         request.RequestMessage.RequestUri,
-                        responseMessage.StatusCode), request.RequestId, true));
+                        responseMessage.StatusCode), request.RequestId, true),
+                            _syncCtx);
                 }
 
                 using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
@@ -555,7 +580,7 @@ namespace ApiClient.Runtime
                             }
                             catch (Exception ex)
                             {
-                                OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                     new ParsingErrorHttpResponse(
                                         ex.Message,
                                         responseMessage.Headers,
@@ -564,7 +589,8 @@ namespace ApiClient.Runtime
                                         request.RequestMessage.RequestUri,
                                         responseMessage.StatusCode),
                                     request.RequestId,
-                                    false));
+                                    false),
+                                    _syncCtx);
                             }
 
                             if (matches != null && matches.Count > 0)
@@ -585,7 +611,7 @@ namespace ApiClient.Runtime
                                         {
                                             content = JsonConvert.DeserializeObject<T>(jsonString);
 
-                                            OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                            OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                                 new HttpResponse<T>(
                                                     content,
                                                     responseMessage.Headers,
@@ -594,12 +620,13 @@ namespace ApiClient.Runtime
                                                     request.RequestMessage.RequestUri,
                                                     responseMessage.StatusCode),
                                                 request.RequestId,
-                                                false));
+                                                false),
+                                                _syncCtx);
                                         }
                                         catch (Exception ex)
                                         {
                                             // handle parsing error
-                                            OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                            OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                                 new ParsingErrorHttpResponse(
                                                     ex.Message,
                                                     responseMessage.Headers,
@@ -608,13 +635,14 @@ namespace ApiClient.Runtime
                                                     request.RequestMessage.RequestUri,
                                                     responseMessage.StatusCode),
                                                 request.RequestId,
-                                                false));
+                                                false),
+                                                _syncCtx);
                                         }
                                     }
                                     else
                                     {
                                         // handle invalid string
-                                        OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                                        OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                             new ParsingErrorHttpResponse(
                                                 "JSON string is null",
                                                 responseMessage.Headers,
@@ -623,14 +651,15 @@ namespace ApiClient.Runtime
                                                 request.RequestMessage.RequestUri,
                                                 responseMessage.StatusCode),
                                             request.RequestId,
-                                            false));
+                                            false),
+                                            _syncCtx);
                                     }
                                 }
                             }
                             else
                             {
                                 // handle invalid string
-                                OnStreamResponse?.InvokeOnMainThread(
+                                OnStreamResponse?.PostOnMainThread(
                                     await _middleware.ProcessResponse(
                                         new ParsingErrorHttpResponse(
                                             $"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'",
@@ -640,7 +669,8 @@ namespace ApiClient.Runtime
                                             request.RequestMessage.RequestUri,
                                             responseMessage.StatusCode),
                                         request.RequestId,
-                                        false));
+                                        false),
+                                        _syncCtx);
                             }
                         }
                         while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
@@ -652,47 +682,34 @@ namespace ApiClient.Runtime
                 if (request.CancellationToken.IsCancellationRequested)
                 {
                     // Task was aborted
-                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                    OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                         new AbortedHttpResponse(request.RequestMessage.RequestUri),
                         request.RequestId,
-                        true));
+                        true),
+                        _syncCtx);
                 }
                 else
                 {
                     // timeout
-                    OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                    OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                         new TimeoutHttpResponse(request.RequestMessage.RequestUri),
                         request.RequestId,
-                        true));
+                        true),
+                        _syncCtx);
                 }
             }
             catch (Exception e)
             {
                 // other exception
-                OnStreamResponse?.InvokeOnMainThread(await _middleware.ProcessResponse(
+                OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                     new NetworkErrorHttpResponse(e.Message, request.RequestMessage.RequestUri),
                     request.RequestId,
-                    true));
+                    true),
+                    _syncCtx);
             }
             finally
             {
                 updateReadDeltaValueCts?.Cancel();
-            }
-        }
-
-        private async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                // calculate delta between last read and current read
-                var readDeltaValue = DateTime.UtcNow.Subtract(streamLastRead());
-                readDelta?.InvokeOnMainThread(readDeltaValue);
-
-                try
-                {
-                    await Task.Delay(_streamReadDeltaUpdateTime, ct);
-                }
-                catch (OperationCanceledException) { }
             }
         }
 

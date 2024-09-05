@@ -50,5 +50,7 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <value></value>
         public int StreamReadDeltaUpdateTime { get; set; } = 1000;
+
+        public bool VerboseLogging { get; set; } = false;
     }
 }

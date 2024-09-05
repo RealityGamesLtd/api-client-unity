@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Tests
+namespace ApiClient.Tests
 {
     public class UrlCacheTests
     {
@@ -28,30 +28,33 @@ namespace Tests
         public void GetDataFromCache()
         {
             // create request
-            var request = new HttpClientByteArrayRequest(
+            var request1 = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
                 new System.Threading.CancellationTokenSource().Token);
 
             // 200 response should be cached
-            var response = urlCache.Process(
-                request,
+            var response1 = urlCache.Process(
+                request1,
                 new CachePolicy(),
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                () => GetResponseFor(request1.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response1 as ICachedHttpResponse).IsFromCache);
 
             // simulate making new request for the same Uri
-            request = request.RecreateWithHttpRequestMessage();
-
-            response = urlCache.Process(
-                request,
+            var request2 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                new System.Threading.CancellationTokenSource().Token);
+
+            var response2 = urlCache.Process(
+                request2,
+                null,
+                () => GetResponseFor(request2.Uri, HttpStatusCode.OK)).Result;
 
             // That response should be from cache
-            Assert.IsTrue((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsTrue((response2 as ICachedHttpResponse).IsFromCache);
         }
 
         [Test(
@@ -60,30 +63,33 @@ namespace Tests
         public void DontGetDataFromCache()
         {
             // create request
-            var request = new HttpClientByteArrayRequest(
+            var request1 = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
                 new System.Threading.CancellationTokenSource().Token);
 
             // 200 response, but don't cache
-            var response = urlCache.Process(
-                request,
+            var response1 = urlCache.Process(
+                request1,
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                () => GetResponseFor(request1.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response1 as ICachedHttpResponse).IsFromCache);
 
             // simulate making new request for the same Uri
-            request = request.RecreateWithHttpRequestMessage();
-
-            response = urlCache.Process(
-                request,
+            var request2 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                new System.Threading.CancellationTokenSource().Token);
+
+            var response2 = urlCache.Process(
+                request2,
+                null,
+                () => GetResponseFor(request2.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response2 as ICachedHttpResponse).IsFromCache);
         }
 
         [UnityTest]
@@ -95,42 +101,50 @@ namespace Tests
         {
             // REQUEST NO 1
             // create request
-            var request = new HttpClientByteArrayRequest(
+            var request1 = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
                 new System.Threading.CancellationTokenSource().Token);
 
             // 200 response, but don't cache
-            var response = urlCache.Process(
-                request,
+            var response1 = urlCache.Process(
+                request1,
                 new CachePolicy() { Expiration = TimeSpan.FromSeconds(1) }, // cache for one second
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                () => GetResponseFor(request1.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response1 as ICachedHttpResponse).IsFromCache);
 
             // REQUEST NO 2
             // simulate making new request for the same Uri
-            response = urlCache.Process(
-                request = request.RecreateWithHttpRequestMessage(),
+            var request2 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                new System.Threading.CancellationTokenSource().Token);
+            var response2 = urlCache.Process(
+                request2,
+                null,
+                () => GetResponseFor(request2.Uri, HttpStatusCode.OK)).Result;
 
             // That response should be from cache
-            Assert.IsTrue((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsTrue((response2 as ICachedHttpResponse).IsFromCache);
 
             // wait for over one second for the cache to expire
             yield return new WaitForSecondsRealtime(2);
 
             // REQUEST NO 3
             // simulate making new request for the same Uri
-            response = urlCache.Process(
-                request = request.RecreateWithHttpRequestMessage(),
+            var request3 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                new System.Threading.CancellationTokenSource().Token);
+            var response3 = urlCache.Process(
+                request3,
+                null,
+                () => GetResponseFor(request3.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response3 as ICachedHttpResponse).IsFromCache);
         }
 
         [UnityTest]
@@ -142,45 +156,53 @@ namespace Tests
         {
             // REQUEST NO 1
             // create request
-            var request = new HttpClientByteArrayRequest(
+            var request1 = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
                 new System.Threading.CancellationTokenSource().Token);
 
             // 200 response, but don't cache
-            var response = urlCache.Process(
-                request,
+            var response1 = urlCache.Process(
+                request1,
                 new CachePolicy() { Expiration = TimeSpan.FromSeconds(60) }, // cache for one second
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                () => GetResponseFor(request1.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response1 as ICachedHttpResponse).IsFromCache);
 
             // At this point we have cached response which should be returned when we make this request again.
 
             // REQUEST NO 2
             // simulate making new request for the same Uri
-            response = urlCache.Process(
-                request = request.RecreateWithHttpRequestMessage(),
+            var request2 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
+                null,
+                new System.Threading.CancellationTokenSource().Token);
+            var response2 = urlCache.Process(
+                request2,
                 new CachePolicy() { ForceExpire = true }, // mark as force expire
-                GetResponseFor(request.Uri, HttpStatusCode.NotFound)).Result;
+                () => GetResponseFor(request2.Uri, HttpStatusCode.NotFound)).Result;
 
             // That response should not be from cache because we ForceExpire
             // The previous response should be dropped, as there is an error the new one shouldn't be cached.
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
-            Assert.IsTrue((response as IHttpResponseStatusCode).StatusCode == HttpStatusCode.NotFound);
+            Assert.IsFalse((response2 as ICachedHttpResponse).IsFromCache);
+            Assert.IsTrue((response2 as IHttpResponseStatusCode).StatusCode == HttpStatusCode.NotFound);
 
             // REQUEST NO 3
             // simulate making new request for the same Uri
-            response = urlCache.Process(
-                request = request.RecreateWithHttpRequestMessage(),
+            var request3 = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, "url_1"),
                 null,
-                GetResponseFor(request.Uri, HttpStatusCode.OK)).Result;
+                new System.Threading.CancellationTokenSource().Token);
+            var response3 = urlCache.Process(
+                request3,
+                null,
+                () => GetResponseFor(request3.Uri, HttpStatusCode.OK)).Result;
 
             // That response shouldn't be from cache
-            Assert.IsFalse((response as ICachedHttpResponse).IsFromCache);
+            Assert.IsFalse((response3 as ICachedHttpResponse).IsFromCache);
             // And it should have OK status code
-            Assert.IsTrue((response as IHttpResponseStatusCode).StatusCode == HttpStatusCode.OK);
+            Assert.IsTrue((response3 as IHttpResponseStatusCode).StatusCode == HttpStatusCode.OK);
 
             // wait for over one second for the cache to expire
             yield return new WaitForSecondsRealtime(2);

@@ -44,7 +44,10 @@ namespace ApiClient.Runtime.Cache
         /// <param name="cachePolicy">If null cache wont be used, otherwise it will follow the specified policy</param>
         /// <param name="continuationAction">Action that will be invoked to make the request</param>
         /// <returns>Response either from cache or from the server</returns>
-        public async Task<IHttpResponse> Process(IHttpRequest request, CachePolicy cachePolicy, Task<IHttpResponse> continuationAction)
+        public async Task<IHttpResponse> Process(
+            IHttpRequest request, 
+            CachePolicy cachePolicy, 
+            Func<Task<IHttpResponse>> continuationAction)
         {
             IHttpResponse response = null;
 
@@ -65,7 +68,7 @@ namespace ApiClient.Runtime.Cache
             if (response == null)
             {
                 // didn't get cached response -> we should make a request
-                response = await continuationAction;
+                response = await continuationAction.Invoke();
 
                 if (cachePolicy != null && response.HasNoErrors)
                 {
@@ -127,7 +130,7 @@ namespace ApiClient.Runtime.Cache
                 new CacheData<IHttpResponse>(
                     data,
                     expireIn,
-                    (data as ICachedHttpResponse).ContentSize())))
+                    (data as ICachedHttpResponse).CacheContentSize())))
             {
                 // log error
                 UnityEngine.Debug.LogError($"{nameof(UrlCache)} -> Couldn't add data to cache for:{url}");
