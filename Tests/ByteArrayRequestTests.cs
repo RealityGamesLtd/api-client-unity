@@ -81,7 +81,7 @@ namespace ApiClient.Tests
 
             Assert.IsNotNull(responseContent.Content);
             Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(35588));
+            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
         }
 
         [UnityTest]
@@ -101,7 +101,7 @@ namespace ApiClient.Tests
 
             Assert.IsNotNull(responseContent.Content);
             Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(35588));
+            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
 
 
             // Second request
@@ -114,7 +114,7 @@ namespace ApiClient.Tests
         private async Task<IHttpResponse> FetchImageTask(CachePolicy cachePolicy)
         {
             var request = ApiClientConnecton.CreateGetByteArrayRequest(
-                "https://www.learningcontainer.com/wp-content/uploads/2020/07/Large-Sample-Image-download-for-Testing.jpg",
+                "https://www.w3.org/People/mimasa/test/imgformat/img/w3c_home.jpg",
                 _cts.Token,
                 cachePolicy: cachePolicy,
                 authentication: new("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkxYTI3OS05MjI5LTQ3ZjQtYzFlYS00NjVkZmZiODQ2ZjUiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyNTU0NDc4NCwiaWF0IjoxNzI1NTQxMTg0fQ.eapdZjyq0-XppLv4jDvgc71RvAumbxhETEJVJY9C2dKdsabIfWvMHgHadXzpomHHXAidJfHP746o9gwoj22mQiToKe7ZtHv0zNCryN6Zf14Elu7i-XaIWPIHtHbM9wfJUg9m9We4eVL7zr0B0zdCzwpKbXVH-Oz08UAM6JZkH2QaT5IQV39cS6HGnMk6McWDn7MtuWNaxaW3tvoDwXF-A7-O1nSMHXoRc2tkd2BcbWQrDADPD9Mq73szvQE7A1G4TrPtyZlkmuNN_UwOmNqB7f2H-llnLmVbuCj7N_idCCb6aW4XB0F5Dx9zU0-YT1EVKWZSN0hBQN0ma33VA70kQNKAXNEFhPwfMFlqqzzmF_mWt8-yy1WBi65yTPLREifkdOGFgub2VUNz-VlH7gnW3xDU22PjTz_DK-50PKc3nc22mBfG8k39qVN17dlSbOrPahefu-gV8dM-dztGZBEOnVEGWbHTvO4bzLwyWb3kxgaqCO9kKnmtr7eXDYgK2a5yY9yu3AJuoZMEhbQtM6xZRtgj2-hnIotpbzTOKS8cb7RQn5EK9i4mqZvopAwW0AgWZGZHIgg4DOZMSHcv4BVHMwOHUULReyCEhU4NHQBZYS_YjwiEX5xv29RS4H0Xu1ZL7osUjhbEwpDbZmIOGCx8Z1fYSOkXXPNqEbkUJDBW2Ns"));
