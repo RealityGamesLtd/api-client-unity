@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2024-09-06
+### Fix
+- added more verbose logging and restored missing UpdateReadDeltaValueTask
+
 ## [1.1.0] - 2024-09-06
 ### Add
 - Basic cache system
