@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
+using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.GraphQLBuilder;
 using ApiClient.Runtime.Requests;
 
@@ -17,6 +18,7 @@ namespace ApiClient.Runtime
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
+        private readonly UrlCache _urlCache = new();
 
         public ApiClientConnection(ApiClientOptions apiClientOptions)
         {
@@ -38,7 +40,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true, 
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -47,6 +50,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                cachePolicy,
                 () => this.CreateGet(
                     url, 
                     ct, 
@@ -72,7 +77,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest<E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -81,6 +87,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                cachePolicy,
                 () => this.CreateGet<E>(
                     url, 
                     ct, 
@@ -101,7 +109,8 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -110,6 +119,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                cachePolicy,
                 () => this.CreateGet<T, E>(
                     url,
                     ct,
@@ -141,6 +152,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePost(
                     url, 
                     jsonBody, 
@@ -176,6 +189,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePost<T>(
                     url, 
                     jsonBody, 
@@ -211,6 +226,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePost<T, E>(
                     url,
                     jsonBody,
@@ -246,6 +263,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePut(
                     url, 
                     jsonBody, 
@@ -281,6 +300,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePut<T>(
                     url,
                     jsonBody,
@@ -316,6 +337,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreatePut<T, E>(
                     url,
                     jsonBody,
@@ -351,6 +374,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreateDelete(
                     url,
                     ct,
@@ -381,6 +406,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreateDelete<T>(
                     url,
                     ct,
@@ -411,6 +438,8 @@ namespace ApiClient.Runtime
                 },
                 _apiClient,
                 ct,
+                _urlCache,
+                null,
                 () => this.CreateDelete<T, E>(
                     url,
                     ct,
@@ -508,6 +537,39 @@ namespace ApiClient.Runtime
             };
 
             request.RequestMessage.Version = _httpVersion;
+
+            return request;
+        }
+
+        public HttpClientByteArrayRequest CreateGetByteArrayRequest(
+            string url, 
+            CancellationToken ct, 
+            AuthenticationHeaderValue authentication = null, 
+            Dictionary<string, string> headers = null, 
+            bool useDefaultHeaders = true,
+            CachePolicy cachePolicy = null)
+        {
+            var request = new HttpClientByteArrayRequest(
+                new HttpRequestMessage(HttpMethod.Get, url)
+                {
+                    Version = _httpVersion
+                },
+                _apiClient,
+                ct,
+                _urlCache,
+                cachePolicy,
+                () => this.CreateGetByteArrayRequest(
+                    url, 
+                    ct, 
+                    authentication, 
+                    headers,
+                    useDefaultHeaders, 
+                    cachePolicy))
+            {
+                Authentication = authentication,
+                Headers = headers,
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+            };
 
             return request;
         }

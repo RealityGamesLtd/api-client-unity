@@ -7,6 +7,8 @@ using ApiClient.Runtime.HttpResponses;
 using ApiClient.Runtime.GraphQLBuilder;
 using System.Text;
 using Newtonsoft.Json;
+using UnityEngine.UI;
+using System;
 
 namespace ApiClientExample
 {
@@ -17,6 +19,7 @@ namespace ApiClientExample
 
 
         [SerializeField] private TextMeshProUGUI responseText;
+        [SerializeField] private Image responseImage;
         [SerializeField] private GameObject responseView;
 
         private void OnEnable()
@@ -181,6 +184,37 @@ namespace ApiClientExample
             {
                 Debug.Log($"Stream read delta:{readDelta}");
             });
+        }
+
+        public async void MakeImageRequest()
+        {
+            responseView.SetActive(true);
+            responseImage.gameObject.SetActive(true);
+
+            _streamRequestCts = new();
+
+            var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI5YTViNWViNi00NWE4LTQ3MGQtYTA1MC03MTdiODA5MzEyNjAiLCJyb2xlIjoicGxheWVyIiwidG9rZW5UeXBlIjoibWMxLWFjY2VzcyIsImV4cCI6MTY3NzY3MzkwMCwiaWF0IjoxNjc1MDgxOTAwfQ.JZuwrsazVtGgrRz8vG60ISayG2bo8zCnT7YgqW-W-RWdxNxvMfexfLrQa_cMve7L77W9yn0-i1DrVaXjd2xziMXEOvpQqfrZeu0eNnC34uu0Q6BJZsXfVjJzPFJTNEAhlyb7m7dXAXufOdit8iYj_M95XbEffGbVCaQ2r-w9RTdalH7ieYo4Df20Z3KHdbP4jke55WuoLJGYYWVmQ6cxPzQ2d5MuUIkcQN5lYNsTG0p34utbiiem6JfOhukGS1EI0xCZjCkJpWVb49u-Ru9HJcSr6SuJ9w0FNuxkKJHLPtgzez2PULNZxDDKvnn9hEASCVt2rE0kVLMNY-LN6d6n0oZXuDKknqQJ0N-vmOIfXuQ43e0D3pbeYJhqU9XKlpnWxA8w0A-fqiDQNVVJ3YntuNYp3Okkog5pHjWqygr96iTu5fQRmG8NWf5JVq61cG-6S89sHUDUW0bT9DFrWs4WprsOVG9GbsjSiwNpPu_wxggBH8ZL5oFcGVGFaa4_TErCvvH2GI-EpQjOW2jR3Na_0tCS57Uc-jirQgXOowpB7VaVj5pIiJ9SZZs7OpWK8F_6o65Mi7DVHB6sY7aOP-mvT9FihtsuQMBsqukjV8GoIBLO03WmuaojtePEpUV-zLHslTriU5_OQFQoH_LVaAewQnmcGBZuVmn-FHwuIyfR38U");
+            var request = Session.Instance.ApiClientConnecton.CreateGetByteArrayRequest("https://images.pexels.com/photos/12721650/pexels-photo-12721650.jpeg?cs=srgb&dl=pexels-aykut-aktas-109304778-12721650.jpg&fm=jpg&w=3975&h=4969&_gl=1*bjx1a9*_ga*MjE2MDk4NzI4LjE3MTc0MjI4ODU.*_ga_8JE65Q40S6*MTcxNzQyNDg3MC4yLjEuMTcxNzQyNDkyNi4wLjAuMA..", _streamRequestCts.Token, authentication);
+
+            var response = await request.Send(progress =>
+            {
+                Debug.Log($"Downloading progress: {(progress.TotalBytesRead / (float)progress.ContentSize) * 100f}, bytesRead:{progress.TotalBytesRead}/{progress.ContentSize}");
+            });
+
+            var byteArrayResponse = response as HttpResponse<byte[]>;
+
+            if (response.HasNoErrors &&
+                byteArrayResponse.ToSpriteImage(out Sprite sprite, out string errorMessage))
+            {
+                responseImage.sprite = sprite;
+            }
+            else
+            {
+                if (!response.IsAborted)
+                {
+                    Debug.Log("error");
+                }
+            }
         }
 
         public void CancelStream()
