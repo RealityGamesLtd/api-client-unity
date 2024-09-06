@@ -28,7 +28,7 @@ namespace ApiClient.Runtime
         private readonly int _streamReadDeltaUpdateTime = 1000;
         private readonly int _byteArrayBufferSize = 4096;
         private readonly bool _verboseLogging;
-        private readonly SynchronizationContext _syncCtx = new();
+        private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
@@ -520,6 +520,11 @@ namespace ApiClient.Runtime
                 // read a stream only when 200 status code was returned
                 if (!responseMessage.IsSuccessStatusCode)
                 {
+                    if (_verboseLogging)
+                    {
+                        Debug.LogError($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
+                    }
+
                     // Handle non 2xx response
                     OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(new HttpResponse<T>(
                         default,
@@ -529,6 +534,12 @@ namespace ApiClient.Runtime
                         request.RequestMessage.RequestUri,
                         responseMessage.StatusCode), request.RequestId, true),
                             _syncCtx);
+                    return;
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
                 }
 
                 using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
@@ -537,6 +548,9 @@ namespace ApiClient.Runtime
                     // run on non UI thread
                     await Task.Run(async () =>
                     {
+                        // start task that will update read delta regularly
+                        _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token);
+
                         char[] buffer = new char[_streamBufferSize];
                         string partialMessage = "";
 
@@ -547,8 +561,12 @@ namespace ApiClient.Runtime
                                 throw new TaskCanceledException();
                             }
 
+                            // read the stream
                             int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
                             var readString = new string(buffer)[..charsRead];
+
+                            // update read time
+                            streamLastReadTime = DateTime.UtcNow;
 
                             /*
                                  On some platform the message might be returned in chunks. 
@@ -593,6 +611,7 @@ namespace ApiClient.Runtime
                                     _syncCtx);
                             }
 
+                            // process matches
                             if (matches != null && matches.Count > 0)
                             {
                                 for (int i = 0; i < matches.Count; i++)
@@ -610,6 +629,11 @@ namespace ApiClient.Runtime
                                         try
                                         {
                                             content = JsonConvert.DeserializeObject<T>(jsonString);
+
+                                            if (_verboseLogging)
+                                            {
+                                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} Got stream message:{jsonString}");
+                                            }
 
                                             OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                                 new HttpResponse<T>(
@@ -658,7 +682,7 @@ namespace ApiClient.Runtime
                             }
                             else
                             {
-                                // handle invalid string
+                                // handle no matches
                                 OnStreamResponse?.PostOnMainThread(
                                     await _middleware.ProcessResponse(
                                         new ParsingErrorHttpResponse(
@@ -710,6 +734,22 @@ namespace ApiClient.Runtime
             finally
             {
                 updateReadDeltaValueCts?.Cancel();
+            }
+        }
+
+        private async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                // calculate delta between last read and current read
+                var readDeltaValue = DateTime.UtcNow.Subtract(streamLastRead());
+                readDelta?.PostOnMainThread(readDeltaValue, _syncCtx);
+
+                try
+                {
+                    await Task.Delay(_streamReadDeltaUpdateTime, ct);
+                }
+                catch (OperationCanceledException) { }
             }
         }
 
