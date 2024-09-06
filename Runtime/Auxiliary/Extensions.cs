@@ -23,18 +23,12 @@ namespace ApiClient.Runtime
         /// <param name="errorMessage">Output Error message if conversion was unsuccesful</param>
         /// <typeparam name="T">Response of <see cref="IHttpResponse"/> type</typeparam>
         /// <returns>True - if converted, false if failed</returns>
-        public static bool ToSpriteImage<T>(this T byteArrayResponse, out Sprite sprite, out string errorMessage) where T : IHttpResponse
+        public static bool ToSpriteImage<T>(this T byteArrayResponse, out Sprite sprite, out string errorMessage) where T : HttpResponse<byte[]>
         {
             sprite = null;
             errorMessage = null;
 
-            if ((byteArrayResponse is HttpResponse<byte[]> response) == false)
-            {
-                errorMessage = $"{nameof(ToSpriteImage)} -> Invalid response type. Expecting:{typeof(HttpResponse<byte[]>)}";
-                return false;
-            }
-
-            if (!byteArrayResponse.HasNoErrors)
+            if (!(byteArrayResponse as IHttpResponse).HasNoErrors)
             {
                 errorMessage = $"{nameof(ToSpriteImage)} -> Response has errors";
                 return false;
@@ -43,7 +37,7 @@ namespace ApiClient.Runtime
             try
             {
                 Texture2D tex = new(2, 2);
-                if (ImageConversion.LoadImage(tex, response.Content))
+                if (ImageConversion.LoadImage(tex, byteArrayResponse.Content))
                 {
                     sprite = Sprite.Create(
                         tex,
@@ -56,7 +50,7 @@ namespace ApiClient.Runtime
                 }
                 else
                 {
-                    errorMessage = $"{nameof(ToSpriteImage)} -> Could not load image from:{response.RequestUri}";
+                    errorMessage = $"{nameof(ToSpriteImage)} -> Could not load image from:{byteArrayResponse.RequestUri}";
                 }
             }
             catch (Exception ex)
