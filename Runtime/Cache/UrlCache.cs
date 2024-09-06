@@ -51,17 +51,15 @@ namespace ApiClient.Runtime.Cache
         {
             IHttpResponse response = null;
 
-            // check cache
-            if (GetFromCache(request.Uri.ToString(), out IHttpResponse cachedResponse))
-            {
-                response = cachedResponse;
-            }
-
             // override
             if (cachePolicy != null && cachePolicy.ForceExpire)
             {
-                response = null;
                 Invalidate(request.Uri.ToString());
+            }
+            // check cache
+            else if (GetFromCache(request.Uri.ToString(), out IHttpResponse cachedResponse))
+            {
+                response = cachedResponse;
             }
 
             // make request
