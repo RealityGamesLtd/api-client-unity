@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2024-09-06
+### Add
+- Basic cache system
+- ByteArray requests support
+### Fix
+- Changed what do we store in Response and Request objects and how we re-creating
+requests - this is related to unexpected Timeouts
+
 ## [1.0.10] - 2024-07-09
 ### Improvement
 - Removed unescape-ing from stream response processing
