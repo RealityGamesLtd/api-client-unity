@@ -26,7 +26,7 @@ namespace ApiClient.Runtime.Requests
                 _authentication = value;
 
                 // apply authentication header
-                if (_authentication != null)
+                if (_authentication != null && RequestMessage?.Headers != null)
                 {
                     RequestMessage.Headers.Authorization = _authentication;
                 }
@@ -44,7 +44,7 @@ namespace ApiClient.Runtime.Requests
 
                 foreach (var kv in value)
                 {
-                    RequestMessage.Headers.Add(kv.Key, kv.Value);
+                    RequestMessage?.Headers?.Add(kv.Key, kv.Value);
                 }
             }
         }
@@ -60,12 +60,12 @@ namespace ApiClient.Runtime.Requests
 
                 foreach (var kv in value)
                 {
-                    RequestMessage.Headers.Add(kv.Key, kv.Value);
+                    RequestMessage?.Headers?.Add(kv.Key, kv.Value);
                 }
             }
             get
             {
-                return RequestMessage.Headers.ToDictionary(
+                return RequestMessage?.Headers?.ToDictionary(
                     x => x.Key,
                     x => string.Join(";", x.Value));
             }
@@ -89,7 +89,7 @@ namespace ApiClient.Runtime.Requests
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
-            Uri = requestMessage.RequestUri;
+            Uri = requestMessage?.RequestUri;
             _apiClient = apiClient;
             _recreateFunc = recreateFunc;
             _urlCache = urlCache;
@@ -103,7 +103,7 @@ namespace ApiClient.Runtime.Requests
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
-            Uri = requestMessage.RequestUri;
+            Uri = requestMessage?.RequestUri;
             _apiClient = apiClient;
         }
 
@@ -112,6 +112,11 @@ namespace ApiClient.Runtime.Requests
             if (IsSent)
             {
                 throw new Exception("This request has been already sent! Resending is not allowed.");
+            }
+
+            if (RequestMessage == null)
+            {
+                throw new Exception($"Trying to send request without {nameof(RequestMessage)}. This is not allowed");
             }
 
             IsSent = true;

@@ -64,6 +64,11 @@ namespace ApiClient.Runtime.Requests
                 throw new Exception("This request has been already sent! Resending is not allowed.");
             }
 
+            if (RequestMessage == null)
+            {
+                throw new Exception($"Trying to send request without {nameof(RequestMessage)}. This is not allowed");
+            }
+
             IsSent = true;
 
             return await _apiClient.SendGraphQLRequest<T>(this);

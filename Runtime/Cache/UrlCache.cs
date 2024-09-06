@@ -121,14 +121,14 @@ namespace ApiClient.Runtime.Cache
                 }
             }
 
-            // check if cache size is not exceeded
+            // TODO: check if cache size is not exceeded
             // log amount left
 
             if (!_cachedData.TryAdd(url,
                 new CacheData<IHttpResponse>(
                     data,
                     expireIn,
-                    (data as ICachedHttpResponse).CacheContentSize())))
+                    (data as ICachedHttpResponse)?.CacheContentSize() ?? 0)))
             {
                 // log error
                 UnityEngine.Debug.LogError($"{nameof(UrlCache)} -> Couldn't add data to cache for:{url}");
