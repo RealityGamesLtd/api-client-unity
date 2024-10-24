@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.2]
+### Fix
+- removed regex unescaping of SSE message body that led to parsing errors on unescaped JSON
+
 ## [1.1.1] - 2024-09-06
 ### Fix
 - added more verbose logging and restored missing UpdateReadDeltaValueTask
