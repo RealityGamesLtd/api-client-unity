@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.3]
+### Fix
+- throw TaskCanceledException when cancellation token is canceled after data read has been started
+
 ## [1.1.2]
 ### Fix
 - removed regex unescaping of SSE message body that led to parsing errors on unescaped JSON
