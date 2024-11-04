@@ -450,6 +450,11 @@ namespace ApiClient.Runtime
                         }
                         while (isMoreToRead && !ct.IsCancellationRequested);
 
+                        if (ct.IsCancellationRequested)
+                        {
+                            throw new TaskCanceledException();
+                        }
+
                         responseBytes = memoryStream.ToArray();
                     });
 
