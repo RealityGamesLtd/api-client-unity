@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.4]
+### Improvement
+- Added more detailed logs for exception messages
+
 ## [1.1.3]
 ### Fix
 - throw TaskCanceledException when cancellation token is canceled after data read has been started
