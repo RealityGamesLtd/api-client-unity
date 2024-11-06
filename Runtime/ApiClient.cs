@@ -124,10 +124,7 @@ namespace ApiClient.Runtime
                     }
                     catch (Exception ex)
                     {
-                        string message = "";
-                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
-                        message += ex.Message;
-
+                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
                     }
 
@@ -220,10 +217,7 @@ namespace ApiClient.Runtime
                     }
                     catch (Exception ex)
                     {
-                        string message = "";
-                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
-                        message += ex.Message;
-
+                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
                     }
 
@@ -336,10 +330,7 @@ namespace ApiClient.Runtime
                     }
                     catch (Exception ex)
                     {
-                        string message = "";
-                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
-                        message += ex.Message;
-
+                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
 
@@ -482,10 +473,7 @@ namespace ApiClient.Runtime
             }
             catch (Exception ex)
             {
-                string message = "";
-                if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
-                message += ex.Message;
-
+                var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception: {ex.InnerException?.Message}\n";
                 response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
             }
 
