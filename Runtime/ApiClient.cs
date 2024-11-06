@@ -125,7 +125,7 @@ namespace ApiClient.Runtime
                     catch (Exception ex)
                     {
                         string message = "";
-                        if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
+                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
                         message += ex.Message;
 
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
@@ -221,7 +221,7 @@ namespace ApiClient.Runtime
                     catch (Exception ex)
                     {
                         string message = "";
-                        if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
+                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
                         message += ex.Message;
 
                         response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
@@ -337,7 +337,7 @@ namespace ApiClient.Runtime
                     catch (Exception ex)
                     {
                         string message = "";
-                        if (ex.InnerException != null) message += $"Inner exception: {ex.InnerException.Message}\n";
+                        if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
                         message += ex.Message;
 
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
@@ -483,7 +483,7 @@ namespace ApiClient.Runtime
             catch (Exception ex)
             {
                 string message = "";
-                if (ex.InnerException != null) message += $"{ex.InnerException.Message}\n";
+                if (ex.InnerException != null) message += $"{ex.Message} -> Inner exception: {ex.InnerException.Message}\n";
                 message += ex.Message;
 
                 response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
