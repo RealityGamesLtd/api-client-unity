@@ -12,7 +12,7 @@ namespace ApiClient.Runtime.Requests
 {
     public class HttpClientRequest<T, E> : IHttpRequest
     {
-        public bool IsSent { get; private set; }
+        public bool IsSent { get; internal set; }
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
         public string RequestId { get; private set; } = Guid.NewGuid().ToString();
@@ -106,8 +106,6 @@ namespace ApiClient.Runtime.Requests
                 throw new Exception($"Trying to send request without {nameof(RequestMessage)}. This is not allowed");
             }
 
-            IsSent = true;
-
             var response = await _urlCache.Process(
                 this,
                 _cachePolicy,
@@ -118,8 +116,9 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientRequest<T, E> RecreateWithHttpRequestMessage()
         {
+            var recreateFuncResult = _recreateFunc?.Invoke();
             RequestMessage.Dispose();
-            return _recreateFunc?.Invoke();
+            return recreateFuncResult;
         }
     }
 }

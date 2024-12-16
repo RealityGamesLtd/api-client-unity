@@ -102,33 +102,37 @@ namespace ApiClient.Runtime
 
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
-                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(reqest, false);
+                    await _middleware.ProcessRequest(request, false);
 
                     try
                     {
-                        using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
+                        using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         response ??= new HttpResponse(
-                                reqest.RequestMessage.RequestUri,
+                                request.RequestMessage.RequestUri,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
                     {
-                        if (reqest.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(reqest.RequestMessage.RequestUri);
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(reqest.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                    }
+                    finally
+                    {
+                        request.IsSent = true;
                     }
 
-                    return await _middleware.ProcessResponse(response, reqest.RequestId, false); ;
+                    return await _middleware.ProcessResponse(response, request.RequestId, false); ;
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -165,13 +169,13 @@ namespace ApiClient.Runtime
 
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
-                    var reqest = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(reqest, false);
+                    await _middleware.ProcessRequest(request, false);
 
                     try
                     {
-                        using var responseMessage = await _httpClient.SendAsync(reqest.RequestMessage, reqest.CancellationToken);
+                        using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         var headers = responseMessage.Headers;
                         E content = default;
@@ -195,7 +199,7 @@ namespace ApiClient.Runtime
                                     responseMessage.Headers,
                                     responseMessage.Content.Headers,
                                     body,
-                                    reqest.RequestMessage.RequestUri,
+                                    request.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
                             }
                         }
@@ -205,23 +209,27 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 body,
-                                reqest.RequestMessage.RequestUri,
+                                request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
                     {
-                        if (reqest.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(reqest.RequestMessage.RequestUri);
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(reqest.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, reqest.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                    }
+                    finally
+                    {
+                        request.IsSent = true;
                     }
 
-                    return await _middleware.ProcessResponse(response, reqest.RequestId, false);
+                    return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -333,6 +341,10 @@ namespace ApiClient.Runtime
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
+                    finally
+                    {
+                        request.IsSent = true;
+                    }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
@@ -346,10 +358,10 @@ namespace ApiClient.Runtime
         }
 
         public async Task<IHttpResponse> SendByteArrayRequest(
-            HttpClientByteArrayRequest request,
+            HttpClientByteArrayRequest req,
             Action<ByteArrayRequestProgress> progressCallback = null)
         {
-            await _middleware.ProcessRequest(request, true);
+            await _middleware.ProcessRequest(req, true);
 
             IHttpResponse response = null;
 
@@ -361,123 +373,132 @@ namespace ApiClient.Runtime
 
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
-                    var reqest = request.IsSent ? request.RecreateWithHttpRequestMessage() : request;
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                    await _middleware.ProcessRequest(reqest, false);
+                    await _middleware.ProcessRequest(request, false);
 
-                    byte[] responseBytes = null;
-
-                    using var responseMessage = await _httpClient.SendAsync(
-                        request.RequestMessage,
-                        HttpCompletionOption.ResponseHeadersRead,
-                        request.CancellationToken);
-
-                    // read a stream only when 200 status code was returned
-                    if (!responseMessage.IsSuccessStatusCode)
+                    try
                     {
-                        if (_verboseLogging)
+                        byte[] responseBytes = null;
+
+                        using var responseMessage = await _httpClient.SendAsync(
+                            req.RequestMessage,
+                            HttpCompletionOption.ResponseHeadersRead,
+                            req.CancellationToken);
+
+                        req.IsSent = true;
+
+                        // read a stream only when 200 status code was returned
+                        if (!responseMessage.IsSuccessStatusCode)
                         {
-                            Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                            if (_verboseLogging)
+                            {
+                                Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                            }
+
+                            // Handle non 2xx response
+                            response = new HttpResponse<byte[]>(
+                                default,
+                                responseMessage.Headers,
+                                null,
+                                null,
+                                req.RequestMessage.RequestUri,
+                                responseMessage.StatusCode);
+                            return response;
                         }
 
-                        // Handle non 2xx response
-                        response = new HttpResponse<byte[]>(
-                            default,
-                            responseMessage.Headers,
-                            null,
-                            null,
-                            request.RequestMessage.RequestUri,
-                            responseMessage.StatusCode);
-                        return response;
-                    }
-
-                    if (_verboseLogging)
-                    {
-                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
-                    }
-
-                    using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-
-                    var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
-
-                    await Task.Run(async () =>
-                    {
-                        var totalBytesRead = 0L;
-                        var buffer = new byte[_byteArrayBufferSize];
-                        var isMoreToRead = true;
-
-                        using var memoryStream = new MemoryStream();
-
-                        do
+                        if (_verboseLogging)
                         {
-                            if (request.CancellationToken.IsCancellationRequested)
+                            Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                        }
+
+                        using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
+
+                        var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
+
+                        await Task.Run(async () =>
+                        {
+                            var totalBytesRead = 0L;
+                            var buffer = new byte[_byteArrayBufferSize];
+                            var isMoreToRead = true;
+
+                            using var memoryStream = new MemoryStream();
+
+                            do
+                            {
+                                if (req.CancellationToken.IsCancellationRequested)
+                                {
+                                    throw new TaskCanceledException();
+                                }
+
+                                var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
+                                if (bytesRead == 0)
+                                {
+                                    // Done!
+                                    isMoreToRead = false;
+
+                                    if (_verboseLogging)
+                                    {
+                                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                                    }
+
+                                    continue;
+                                }
+
+                                await memoryStream.WriteAsync(buffer, 0, bytesRead);
+                                totalBytesRead += bytesRead;
+
+                                if (_verboseLogging)
+                                {
+                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLength}.");
+                                }
+
+                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLength), _syncCtx);
+                            }
+                            while (isMoreToRead && !ct.IsCancellationRequested);
+
+                            if (ct.IsCancellationRequested)
                             {
                                 throw new TaskCanceledException();
                             }
 
-                            var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, request.CancellationToken);
-                            if (bytesRead == 0)
-                            {
-                                // Done!
-                                isMoreToRead = false;
+                            responseBytes = memoryStream.ToArray();
+                        });
 
-                                if (_verboseLogging)
-                                {
-                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
-                                }
+                        response ??= new HttpResponse<byte[]>(
+                                                            responseBytes,
+                                                            responseMessage.Headers,
+                                                            responseMessage.Content?.Headers,
+                                                            null,
+                                                            req.RequestMessage.RequestUri,
+                                                            responseMessage.StatusCode);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
+                        else
+                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
+                    }
+                    catch (Exception ex)
+                    {
+                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                    }
+                    finally
+                    {
+                        request.IsSent = true;
+                    }
 
-                                continue;
-                            }
-
-                            await memoryStream.WriteAsync(buffer, 0, bytesRead);
-                            totalBytesRead += bytesRead;
-
-                            if (_verboseLogging)
-                            {
-                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLength}.");
-                            }
-
-                            progressCallback?.PostOnMainThread(new(totalBytesRead, contentLength), _syncCtx);
-                        }
-                        while (isMoreToRead && !ct.IsCancellationRequested);
-
-                        if (ct.IsCancellationRequested)
-                        {
-                            throw new TaskCanceledException();
-                        }
-
-                        responseBytes = memoryStream.ToArray();
-                    });
-
-                    response ??= new HttpResponse<byte[]>(
-                                                        responseBytes,
-                                                        responseMessage.Headers,
-                                                        responseMessage.Content?.Headers,
-                                                        null,
-                                                        request.RequestMessage.RequestUri,
-                                                        responseMessage.StatusCode);
-
-                    return await _middleware.ProcessResponse(response, request.RequestId, false); ;
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, request.CancellationToken, true);
+                    return await _middleware.ProcessResponse(response, req.RequestId, false); ;
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
-                if (request.CancellationToken.IsCancellationRequested)
-                {
-                    response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
-                }
-                else
-                {
-                    response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
-                }
-            }
-            catch (Exception ex)
-            {
-                var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
             }
 
-            return await _middleware.ProcessResponse(response, request.RequestId, true); ;
+            return await _middleware.ProcessResponse(response, req.RequestId, true); ;
         }
 
         /// <summary>
@@ -725,6 +746,7 @@ namespace ApiClient.Runtime
             }
             finally
             {
+                request.IsSent = true;
                 updateReadDeltaValueCts?.Cancel();
             }
         }
@@ -832,6 +854,8 @@ namespace ApiClient.Runtime
                         // no result
                         response = new NetworkErrorHttpResponse("No valid result in graphQLResponse", graphQLRequest.Uri);
                     }
+
+                    graphQLRequest.IsSent = true;
 
                     return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
 

@@ -11,7 +11,7 @@ namespace ApiClient.Runtime.Requests
 {
     public class HttpClientStreamRequest<T> : IHttpRequest
     {
-        public bool IsSent { get; private set; }
+        public bool IsSent { get; internal set; }
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
         public string RequestId { get; } = Guid.NewGuid().ToString();
@@ -92,8 +92,6 @@ namespace ApiClient.Runtime.Requests
             {
                 throw new Exception($"Trying to send request without {nameof(RequestMessage)}. This is not allowed");
             }
-
-            IsSent = true;
 
             await _apiClient.SendStreamRequest(this, OnStreamResponse, readDelta);
         }
