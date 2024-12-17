@@ -104,6 +104,9 @@ namespace ApiClient.Runtime
                     // posible to send the same request message multiple times
                     var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
+                    // mark as sent as soon as the condition has been checked
+                    request.IsSent = true;
+
                     await _middleware.ProcessRequest(request, false);
 
                     try
@@ -126,10 +129,6 @@ namespace ApiClient.Runtime
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
-                    }
-                    finally
-                    {
-                        request.IsSent = true;
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false); ;
@@ -170,6 +169,9 @@ namespace ApiClient.Runtime
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
                     var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+
+                    // mark as sent as soon as the condition has been checked
+                    request.IsSent = true;
 
                     await _middleware.ProcessRequest(request, false);
 
@@ -224,10 +226,6 @@ namespace ApiClient.Runtime
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
-                    finally
-                    {
-                        request.IsSent = true;
-                    }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
@@ -268,6 +266,9 @@ namespace ApiClient.Runtime
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
                     var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+
+                    // mark as sent as soon as the condition has been checked
+                    request.IsSent = true;
 
                     await _middleware.ProcessRequest(request, false);
 
@@ -341,10 +342,6 @@ namespace ApiClient.Runtime
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
-                    finally
-                    {
-                        request.IsSent = true;
-                    }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
@@ -374,6 +371,9 @@ namespace ApiClient.Runtime
                     // if the request has been sent already we must recreate it as it's not
                     // posible to send the same request message multiple times
                     var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+
+                    // mark as sent as soon as the condition has been checked
+                    request.IsSent = true;
 
                     await _middleware.ProcessRequest(request, false);
 
@@ -485,10 +485,6 @@ namespace ApiClient.Runtime
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
-                    finally
-                    {
-                        request.IsSent = true;
-                    }
 
                     return await _middleware.ProcessResponse(response, req.RequestId, false); ;
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
@@ -524,6 +520,8 @@ namespace ApiClient.Runtime
 
             try
             {
+                request.IsSent = true;
+
                 await _middleware.ProcessRequest(request, true);
 
                 using var responseMessage = await _httpClient.SendAsync(
@@ -746,7 +744,6 @@ namespace ApiClient.Runtime
             }
             finally
             {
-                request.IsSent = true;
                 updateReadDeltaValueCts?.Cancel();
             }
         }
@@ -787,6 +784,8 @@ namespace ApiClient.Runtime
             {
                 await _retryPolicy.ExecuteAsync(async (c, ct) =>
                 {
+                    graphQLRequest.IsSent = true;
+
                     await _middleware.ProcessRequest(graphQLRequest, false);
 
                     var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
@@ -854,8 +853,6 @@ namespace ApiClient.Runtime
                         // no result
                         response = new NetworkErrorHttpResponse("No valid result in graphQLResponse", graphQLRequest.Uri);
                     }
-
-                    graphQLRequest.IsSent = true;
 
                     return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
 
