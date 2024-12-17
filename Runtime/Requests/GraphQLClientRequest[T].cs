@@ -21,7 +21,7 @@ namespace ApiClient.Runtime.Requests
         public CancellationToken CancellationToken { get; }
         public AuthenticationHeaderValue Authentication { get; set; }
         public Uri Uri { get; private set; }
-        public bool IsSent { get; private set; }
+        public bool IsSent { get; internal set; }
         public string RequestId { get; } = Guid.NewGuid().ToString();
         public HttpRequestMessage RequestMessage { get; private set; }
 
@@ -68,8 +68,6 @@ namespace ApiClient.Runtime.Requests
             {
                 throw new Exception($"Trying to send request without {nameof(RequestMessage)}. This is not allowed");
             }
-
-            IsSent = true;
 
             return await _apiClient.SendGraphQLRequest<T>(this);
         }

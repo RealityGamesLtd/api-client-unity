@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.5]
+### Fix
+- Custom headers missing on re-create fix
+### Improvement
+- Changed IsSent assignment
+
 ## [1.1.4]
 ### Improvement
 - Added more detailed logs for exception messages

@@ -12,7 +12,7 @@ namespace ApiClient.Runtime.Requests
 {
     public class HttpClientRequest<E> : IHttpRequest
     {
-        public bool IsSent { get; private set; }
+        public bool IsSent { get; internal set; }
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; private set; }
         public string RequestId { get; private set; } = Guid.NewGuid().ToString();
@@ -119,8 +119,9 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientRequest<E> RecreateWithHttpRequestMessage()
         {
+            var recreateFuncResult = _recreateFunc?.Invoke();
             RequestMessage.Dispose();
-            return _recreateFunc?.Invoke();
+            return recreateFuncResult;
         }
     }
 }
