@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -45,8 +46,13 @@ namespace ApiClient.Runtime
 
         public ApiClient(ApiClientOptions options)
         {
+            var handler = new HttpClientHandler();
+            if (options.UseGzipCompression)
+            {
+                handler.AutomaticDecompression = DecompressionMethods.GZip;
+            }
             // create http client instance
-            _httpClient = new HttpClient()
+            _httpClient = new HttpClient(handler)
             {
                 Timeout = options.Timeout
             };
