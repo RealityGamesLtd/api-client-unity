@@ -53,6 +53,6 @@ namespace ApiClient.Runtime
 
         public bool VerboseLogging { get; set; } = false;
 
-        public bool UseGzipCompression { get; set; }
+        public bool UseGzipCompression { get; set; } = false;
     }
 }
