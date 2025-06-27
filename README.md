@@ -215,6 +215,14 @@ var authentication = new AuthenticationHeaderValue("Bearer", "Token");
 var request = _apiClientConnecton.CreateGet<T>("url", cts.Token, authentication: authentication);
 ```
 
+## GZip Compression
+GZip compression is supported by default. To enable it, set the `Accept-Encoding: gzip` header as a default header in the `ApiClientConnection` instance.
+
+```csharp
+var apiClientConnecton = new ApiClientConnection(...);
+apiClientConnecton.SetDefaultHeader("Accept-Encoding", "gzip");
+```
+
 ## Troubleshoot 
 When using IL2CPP and ManagedStrippingLevel unused types won't be compiled.
 To fix that there is an utility class to enforce ahead of time (AOT) compilation of types.
