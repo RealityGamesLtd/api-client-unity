@@ -58,7 +58,7 @@ var request = apiClientConnection.CreateDelete("url", cts.Token);
 
 ### Make Stream request
 ```csharp
-var request = apiClientConnection.CreateGetStreamRequest("url, cts.Token);
+var request = apiClientConnection.CreateGetStreamRequest("url", cts.Token);
 await request.Send<StreamData>(streamResponse =>
 {
     // process response
