@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -86,7 +84,7 @@ namespace ApiClient.Runtime
         /// <summary>
         /// Make http request using HttpCLient with no body processing.
         /// </summary>
-        /// <param name="req">Request to make<</param>
+        /// <param name="req">Request to make</param>
         /// <returns><see cref="HttpResponse"/> or 
         /// <see cref="AbortedHttpResponse"/> or 
         /// <see cref="TimeoutHttpResponse"/> or 
@@ -134,7 +132,7 @@ namespace ApiClient.Runtime
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
 
-                    return await _middleware.ProcessResponse(response, request.RequestId, false); ;
+                    return await _middleware.ProcessResponse(response, request.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -182,7 +180,6 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
-                        var headers = responseMessage.Headers;
                         E content = default;
 
                         // we can try to parse the error message only when there is correct media type and
@@ -248,7 +245,7 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <typeparam name="T">Response content type</typeparam>
         /// <typeparam name="E">Response error type</typeparam>
-        /// <param name="req">Request to make<</param>
+        /// <param name="req">Request to make</param>
         /// <returns><see cref="HttpResponse"/> or 
         /// <see cref="ParsingErrorHttpResponse"/> or 
         /// <see cref="AbortedHttpResponse"/> or 
@@ -279,11 +276,11 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = string.Empty;
-                        var stream = await responseMessage.Content.ReadAsStreamAsync();
+                        await using var stream = await responseMessage.Content.ReadAsStreamAsync();
                         // decompress gzip stream if needed
                         if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
                         {
-                            using var decompressedStream = new GZipStream(stream, CompressionMode.Decompress);
+                            await using var decompressedStream = new GZipStream(stream, CompressionMode.Decompress);
                             using var reader = new StreamReader(decompressedStream);
                             body = await reader.ReadToEndAsync();
                         }
@@ -293,11 +290,10 @@ namespace ApiClient.Runtime
                             body = await reader.ReadToEndAsync();
                         }
                         
-                        //var body = await responseMessage.Content.ReadAsStringAsync();
-                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        var contentLength = body.Length;
                         // This will be useful for debugging if compression is effective
-                        //Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
+                        // var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        // var contentLength = body.Length;
+                        // Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
                         T content = default;
                         E error = default;
 
@@ -347,7 +343,7 @@ namespace ApiClient.Runtime
                                 content,
                                 error,
                                 responseMessage.Headers,
-                                responseMessage.Content.Headers,
+                                responseMessage.Content?.Headers,
                                 body,
                                 request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
@@ -434,8 +430,8 @@ namespace ApiClient.Runtime
                             Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
                         }
 
-                        using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                        Stream responseStream = contentStream;;
+                        await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
+                        Stream responseStream = contentStream;
 
                         // decompress gzip stream if needed
                         if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
@@ -515,7 +511,7 @@ namespace ApiClient.Runtime
                         response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
                     }
 
-                    return await _middleware.ProcessResponse(response, req.RequestId, false); ;
+                    return await _middleware.ProcessResponse(response, req.RequestId, false);
                 }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
@@ -523,7 +519,7 @@ namespace ApiClient.Runtime
                 response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
             }
 
-            return await _middleware.ProcessResponse(response, req.RequestId, true); ;
+            return await _middleware.ProcessResponse(response, req.RequestId, true);
         }
 
         /// <summary>
@@ -586,7 +582,7 @@ namespace ApiClient.Runtime
                     Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
                 }
 
-                using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
+                await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
                 using (StreamReader streamReader = new(contentStream, encoding: System.Text.Encoding.UTF8, true))
                 {
                     // run on non UI thread
@@ -859,7 +855,7 @@ namespace ApiClient.Runtime
                         catch (Exception e)
                         {
                             // handle invalid cast
-                            response = new ParsingErrorHttpResponse(e.Message, graphQLHttpResponse.ResponseHeaders, graphQLRequest.Uri);
+                            response = new ParsingErrorHttpResponse(e.Message, graphQLHttpResponse?.ResponseHeaders, graphQLRequest.Uri);
                         }
 
                         if (response == null && graphQLResponse.Result.Errors == null)
