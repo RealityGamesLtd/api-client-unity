@@ -278,17 +278,7 @@ namespace ApiClient.Runtime
                         var body = string.Empty;
                         await using var stream = await responseMessage.Content.ReadAsStreamAsync();
                         // decompress gzip stream if needed
-                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
-                        {
-                            await using var decompressedStream = new GZipStream(stream, CompressionMode.Decompress);
-                            using var reader = new StreamReader(decompressedStream);
-                            body = await reader.ReadToEndAsync();
-                        }
-                        else
-                        {
-                            using var reader = new StreamReader(stream);
-                            body = await reader.ReadToEndAsync();
-                        }
+                        body = await DecompressResponseContentAsync(stream, responseMessage.Content.Headers.ContentEncoding);
                         
                         // This will be useful for debugging if compression is effective
                         // var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
