@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -46,13 +48,8 @@ namespace ApiClient.Runtime
 
         public ApiClient(ApiClientOptions options)
         {
-            var handler = new HttpClientHandler();
-            if (options.UseGzipCompression)
-            {
-                handler.AutomaticDecompression = DecompressionMethods.GZip;
-            }
             // create http client instance
-            _httpClient = new HttpClient(handler)
+            _httpClient = new HttpClient()
             {
                 Timeout = options.Timeout
             };
@@ -281,7 +278,26 @@ namespace ApiClient.Runtime
                     try
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
-                        var body = await responseMessage.Content.ReadAsStringAsync();
+                        var body = string.Empty;
+                        var stream = await responseMessage.Content.ReadAsStreamAsync();
+                        // decompress gzip stream if needed
+                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                        {
+                            using var decompressedStream = new GZipStream(stream, CompressionMode.Decompress);
+                            using var reader = new StreamReader(decompressedStream);
+                            body = await reader.ReadToEndAsync();
+                        }
+                        else
+                        {
+                            using var reader = new StreamReader(stream);
+                            body = await reader.ReadToEndAsync();
+                        }
+                        
+                        //var body = await responseMessage.Content.ReadAsStringAsync();
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        var contentLength = body.Length;
+                        // This will be useful for debugging if compression is effective
+                        //Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
                         T content = default;
                         E error = default;
 
@@ -419,6 +435,13 @@ namespace ApiClient.Runtime
                         }
 
                         using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
+                        Stream responseStream = contentStream;;
+
+                        // decompress gzip stream if needed
+                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                        {
+                            responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
+                        }
 
                         var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
 
@@ -437,7 +460,7 @@ namespace ApiClient.Runtime
                                     throw new TaskCanceledException();
                                 }
 
-                                var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
+                                var bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
                                 if (bytesRead == 0)
                                 {
                                     // Done!
@@ -524,6 +547,9 @@ namespace ApiClient.Runtime
             DateTime streamLastReadTime = DateTime.UtcNow;
             var updateReadDeltaValueCts = new CancellationTokenSource();
 
+            // remove Accept-Encoding header to prevent automatic gzip compression
+            request.RequestMessage.Headers.Remove("Accept-Encoding");
+            
             try
             {
                 request.IsSent = true;

@@ -52,7 +52,5 @@ namespace ApiClient.Runtime
         public int StreamReadDeltaUpdateTime { get; set; } = 1000;
 
         public bool VerboseLogging { get; set; } = false;
-
-        public bool UseGzipCompression { get; set; } = false;
     }
 }
