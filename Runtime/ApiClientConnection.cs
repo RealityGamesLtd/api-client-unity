@@ -28,11 +28,18 @@ namespace ApiClient.Runtime
 
         public void SetDefaultHeader(string key, string value)
         {
-            if (_defaultHeaders.ContainsKey(key))
-            {
-                _defaultHeaders.Remove(key);
-            }
-            _defaultHeaders.Add(key, value);
+            if (string.IsNullOrEmpty(key) || value == null)
+                return;
+
+            _defaultHeaders[key.Trim()] = value;
+        }
+        
+        public void RemoveDefaultHeader(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+                return;
+
+            _defaultHeaders.Remove(key.Trim());
         }
 
         public HttpClientRequest CreateGet(
