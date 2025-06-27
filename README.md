@@ -1,7 +1,7 @@
 # ApiClient with REST.API & GraphQl support for Unity
 
-[![openupm](https://img.shields.io/npm/v/com.realitygames.apiclient?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.realitygames.apiclient/)
-[![openupm](https://img.shields.io/badge/dynamic/json?color=brightgreen&label=downloads&query=%24.downloads&suffix=%2Fmonth&url=https%3A%2F%2Fpackage.openupm.com%2Fdownloads%2Fpoint%2Flast-month%2Fcom.realitygames.apiclient)](https://openupm.com/packages/com.realitygames.apiclient/)
+[![OpenUPM Version Badge](https://img.shields.io/npm/v/com.realitygames.apiclient?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.realitygames.apiclient/)
+[![OpenUPM Downloads Badge](https://img.shields.io/badge/dynamic/json?color=brightgreen&label=downloads&query=%24.downloads&suffix=%2Fmonth&url=https%3A%2F%2Fpackage.openupm.com%2Fdownloads%2Fpoint%2Flast-month%2Fcom.realitygames.apiclient)](https://openupm.com/packages/com.realitygames.apiclient/)
 
 ## Prerequisites
 Check and install all [DEPENDENCIES](#dependencies) before importing this package to avoid errors.
