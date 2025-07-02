@@ -20,6 +20,9 @@ namespace ApiClient.Runtime
 {
     public class ApiClient
     {
+        public long ResponseTotalCompressedBytes { get; private set; }
+        public long ResponseTotalUncompressedBytes { get; private set; }
+        
         public UrlCache Cache { get; } = new();
 
         private readonly GraphQLHttpClient _graphQLClient;
@@ -181,7 +184,12 @@ namespace ApiClient.Runtime
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         E content = default;
-
+                        
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        var contentLength = body.Length;
+                        ResponseTotalUncompressedBytes += contentLength;
+                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
+                        
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
                         if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" &&
@@ -291,8 +299,10 @@ namespace ApiClient.Runtime
                         }
                         
                         // This will be useful for debugging if compression is effective
-                        // var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        // var contentLength = body.Length;
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        var contentLength = body.Length;
+                        ResponseTotalUncompressedBytes += contentLength;
+                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
                         // Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
                         T content = default;
                         E error = default;
@@ -438,8 +448,8 @@ namespace ApiClient.Runtime
                         {
                             responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
                         }
-
-                        var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
+                        
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
 
                         await Task.Run(async () =>
                         {
@@ -475,10 +485,10 @@ namespace ApiClient.Runtime
 
                                 if (_verboseLogging)
                                 {
-                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLength}.");
+                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
                                 }
 
-                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLength), _syncCtx);
+                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLengthFromHeader), _syncCtx);
                             }
                             while (isMoreToRead && !ct.IsCancellationRequested);
 
@@ -489,6 +499,10 @@ namespace ApiClient.Runtime
 
                             responseBytes = memoryStream.ToArray();
                         });
+                        
+                        var contentLength = responseBytes.Length;
+                        ResponseTotalCompressedBytes += contentLengthFromHeader;
+                        ResponseTotalUncompressedBytes += contentLength;
 
                         response ??= new HttpResponse<byte[]>(
                                                             responseBytes,
