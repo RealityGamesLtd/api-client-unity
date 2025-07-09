@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.2.1]
+### Add
+- IHttpResponse will now expose HttpRequestMessage it originated from
+
 ## [1.2.0]
 ### Add
 - Added support for gzip compression for non-stream requests
