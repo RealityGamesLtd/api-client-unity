@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -11,13 +12,20 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsAborted => false;
         public bool IsTimeout => true;
         public bool IsContentParsingError => false;
+        public HttpRequestMessage RequestMessage { get; private set; }
         public Uri RequestUri { get; private set; }
         public Dictionary<string, string> Headers { get; private set; } = null;
         public Dictionary<string, string> ContentHeaders { get; private set; } = null;
 
-        public TimeoutHttpResponse(Uri requestUri)
+        public TimeoutHttpResponse(HttpRequestMessage request)
         {
-            RequestUri = requestUri;
+            RequestMessage = request;
+            RequestUri = request.RequestUri;
+        }
+
+        public TimeoutHttpResponse(Uri uri)
+        {
+            RequestUri = uri;
         }
     }
 }

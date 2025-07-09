@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using ApiClient.Runtime.Cache;
 
@@ -13,13 +14,24 @@ namespace ApiClient.Runtime.HttpResponses
     /// <typeparam name="T"></typeparam>
     public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, ICachedHttpResponse
     {
+        public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, HttpRequestMessage request, HttpStatusCode statusCode)
+        {
+            Content = content;
+            Headers = headers.ToHeadersDictionary();
+            RequestMessage = request;
+            RequestUri = request.RequestUri;
+            StatusCode = statusCode;
+            ContentHeaders = contentHeaders != null ? contentHeaders.ToHeadersDictionary() : new Dictionary<string, string>();
+            Body = body;
+        }
+        
         public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
         {
             Content = content;
             Headers = headers.ToHeadersDictionary();
             RequestUri = uri;
             StatusCode = statusCode;
-            ContentHeaders = contentHeaders.ToHeadersDictionary();
+            ContentHeaders = contentHeaders != null ? contentHeaders.ToHeadersDictionary() : new Dictionary<string, string>();
             Body = body;
         }
 
@@ -44,6 +56,7 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsNetworkError => false;
         public bool IsAborted => false;
         public bool IsTimeout => false;
+        public HttpRequestMessage RequestMessage { get; private set; }
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }

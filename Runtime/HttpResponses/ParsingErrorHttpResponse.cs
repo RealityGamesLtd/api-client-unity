@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 
 namespace ApiClient.Runtime.HttpResponses
@@ -13,13 +14,13 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsNetworkError => false;
         public bool IsAborted => false;
         public bool IsTimeout => false;
+        public HttpRequestMessage RequestMessage { get; private set; }
         public Uri RequestUri { get; private set; }
         public string Message { get; }
         public Dictionary<string, string> Headers { get; private set; }
         public Dictionary<string, string> ContentHeaders { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public string Body { get; private set; }
-
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
         {
@@ -31,11 +32,19 @@ namespace ApiClient.Runtime.HttpResponses
             Body = body;
         }
 
-        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri)
+        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpRequestMessage request)
         {
             Message = errorMessage;
             Headers = headers.ToHeadersDictionary();
-            RequestUri = requestUri;
+            RequestMessage = request;
+            RequestUri = request.RequestUri;
+        }
+
+        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri uri)
+        {
+            Message = errorMessage;
+            Headers = headers.ToHeadersDictionary();
+            RequestUri = uri;
         }
     }
 }

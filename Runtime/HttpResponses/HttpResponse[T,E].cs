@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using ApiClient.Runtime.Cache;
 
@@ -14,12 +15,13 @@ namespace ApiClient.Runtime.HttpResponses
     /// <typeparam name="E"></typeparam>
     public class HttpResponse<T, E> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, ICachedHttpResponse
     {
-        public HttpResponse(T content, E error, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
+        public HttpResponse(T content, E error, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, HttpRequestMessage request, HttpStatusCode statusCode)
         {
             Content = content;
             Error = error;
             Headers = headers.ToHeadersDictionary();
-            RequestUri = uri;
+            RequestMessage = request;
+            RequestUri = request.RequestUri;
             StatusCode = statusCode;
             ContentHeaders = contentHeaders.ToHeadersDictionary();
             Body = body;
@@ -52,6 +54,7 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsNetworkError => false;
         public bool IsAborted => false;
         public bool IsTimeout => false;
+        public HttpRequestMessage RequestMessage { get; private set; }
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }

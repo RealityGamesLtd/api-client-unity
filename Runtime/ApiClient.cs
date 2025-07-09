@@ -114,7 +114,7 @@ namespace ApiClient.Runtime
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         response ??= new HttpResponse(
-                                request.RequestMessage.RequestUri,
+                                request.RequestMessage,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
@@ -124,12 +124,12 @@ namespace ApiClient.Runtime
                         if (request.CancellationToken.IsCancellationRequested)
                             response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
@@ -209,9 +209,9 @@ namespace ApiClient.Runtime
                         response ??= new HttpResponse<E>(
                                 content,
                                 responseMessage.Headers,
-                                responseMessage.Content.Headers,
+                                responseMessage.Content?.Headers,
                                 body,
-                                request.RequestMessage.RequestUri,
+                                request.RequestMessage,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
@@ -219,12 +219,12 @@ namespace ApiClient.Runtime
                         if (request.CancellationToken.IsCancellationRequested)
                             response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
@@ -345,7 +345,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content?.Headers,
                                 body,
-                                request.RequestMessage.RequestUri,
+                                request.RequestMessage,
                                 responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
@@ -353,12 +353,12 @@ namespace ApiClient.Runtime
                         if (request.CancellationToken.IsCancellationRequested)
                             response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
@@ -420,7 +420,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 null,
                                 null,
-                                req.RequestMessage.RequestUri,
+                                req.RequestMessage,
                                 responseMessage.StatusCode);
                             return response;
                         }
@@ -495,7 +495,7 @@ namespace ApiClient.Runtime
                                                             responseMessage.Headers,
                                                             responseMessage.Content?.Headers,
                                                             null,
-                                                            req.RequestMessage.RequestUri,
+                                                            req.RequestMessage,
                                                             responseMessage.StatusCode);
                     }
                     catch (TaskCanceledException)
@@ -503,12 +503,12 @@ namespace ApiClient.Runtime
                         if (request.CancellationToken.IsCancellationRequested)
                             response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
                         else
-                            response = new TimeoutHttpResponse(request.RequestMessage.RequestUri);
+                            response = new TimeoutHttpResponse(request.RequestMessage);
                     }
                     catch (Exception ex)
                     {
                         var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage.RequestUri);
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                     }
 
                     return await _middleware.ProcessResponse(response, req.RequestId, false);
@@ -571,7 +571,7 @@ namespace ApiClient.Runtime
                         responseMessage.Headers,
                         null,
                         null,
-                        request.RequestMessage.RequestUri,
+                        request.RequestMessage,
                         responseMessage.StatusCode), request.RequestId, true),
                             _syncCtx);
                     return;
@@ -755,7 +755,7 @@ namespace ApiClient.Runtime
                 {
                     // timeout
                     OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
-                        new TimeoutHttpResponse(request.RequestMessage.RequestUri),
+                        new TimeoutHttpResponse(request.RequestMessage),
                         request.RequestId,
                         true),
                         _syncCtx);
@@ -765,7 +765,7 @@ namespace ApiClient.Runtime
             {
                 // other exception
                 OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
-                    new NetworkErrorHttpResponse(e.Message, request.RequestMessage.RequestUri),
+                    new NetworkErrorHttpResponse(e.Message, request.RequestMessage),
                     request.RequestId,
                     true),
                     _syncCtx);
