@@ -42,7 +42,7 @@ namespace ApiClient.Runtime.HttpResponses
         /// </summary>
         bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout;
 
-        HttpRequestMessage RequestMessage { get; }
+        HttpMethod RequestMethod { get; }
         Uri RequestUri { get; }
         Dictionary<string, string> Headers { get; }
         Dictionary<string, string> ContentHeaders { get; }

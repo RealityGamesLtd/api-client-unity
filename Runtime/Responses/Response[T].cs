@@ -18,7 +18,7 @@ namespace ApiClient.Runtime
         public bool IsAborted { get; private set; }
         public bool IsTimeout { get; private set; }
         public bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout && Error == null;
-        public HttpRequestMessage RequestMessage { get; private set; }
+        public HttpMethod RequestMethod { get; }
         public Uri RequestUri { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }
         public Dictionary<string, string> ContentHeaders { get; private set; }
@@ -42,7 +42,7 @@ namespace ApiClient.Runtime
             IsNetworkError = response.IsNetworkError;
             IsAborted = response.IsAborted;
             IsTimeout = response.IsTimeout;
-            RequestMessage = response.RequestMessage;
+            RequestMethod = response.RequestMethod;
             RequestUri = response.RequestUri;
             Headers = response.Headers;
             ContentHeaders = response.ContentHeaders;

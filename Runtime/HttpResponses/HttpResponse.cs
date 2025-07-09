@@ -15,7 +15,7 @@ namespace ApiClient.Runtime.HttpResponses
     {
         public HttpResponse(HttpRequestMessage request, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, HttpStatusCode statusCode)
         {
-            RequestMessage = request;
+            RequestMethod = request.Method;
             RequestUri = request.RequestUri;
             StatusCode = statusCode;
             Headers = headers.ToHeadersDictionary();
@@ -37,7 +37,7 @@ namespace ApiClient.Runtime.HttpResponses
         public bool IsNetworkError => false;
         public bool IsAborted => false;
         public bool IsTimeout => false;
-        public HttpRequestMessage RequestMessage { get; private set; }
+        public HttpMethod RequestMethod { get; }
         public Uri RequestUri { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }
