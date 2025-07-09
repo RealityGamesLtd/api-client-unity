@@ -195,7 +195,7 @@ namespace ApiClient.Runtime
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
                         var contentLength = Encoding.UTF8.GetByteCount(body);
                         ResponseTotalUncompressedBytes += contentLength;
-                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
+                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? 0;
                         
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
