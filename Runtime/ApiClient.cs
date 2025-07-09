@@ -21,7 +21,16 @@ namespace ApiClient.Runtime
 {
     public interface IApiClient
     {
+        /// <summary>
+        /// Gets the total number of bytes received in compressed format from HTTP responses.
+        /// If the compressed size is unavailable, this property will return 0.
+        /// </summary>
         long ResponseTotalCompressedBytes { get; }
+
+        /// <summary>
+        /// Gets the total number of bytes received in uncompressed format from HTTP responses.
+        /// This property always reflects the uncompressed size, even if compression was not applied.
+        /// </summary>
         long ResponseTotalUncompressedBytes { get; }
     }
     
