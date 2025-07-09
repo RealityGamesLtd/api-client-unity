@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GraphQL.Client.Http;
@@ -18,8 +19,28 @@ using UnityEngine;
 
 namespace ApiClient.Runtime
 {
-    public class ApiClient
+    public interface IApiClient
     {
+        /// <summary>
+        /// Gets the total number of bytes received in compressed format from HTTP responses.
+        /// If the compressed size is unavailable, this property will return 0.
+        /// </summary>
+        long ResponseTotalCompressedBytes { get; }
+
+        /// <summary>
+        /// Gets the total number of bytes received in uncompressed format from HTTP responses.
+        /// This property always reflects the uncompressed size, even if compression was not applied.
+        /// </summary>
+        long ResponseTotalUncompressedBytes { get; }
+    }
+    
+    public class ApiClient : IApiClient
+    {
+        private long _responseTotalCompressedBytes;
+        private long _responseTotalUncompressedBytes;
+        public long ResponseTotalCompressedBytes => _responseTotalCompressedBytes;
+        public long ResponseTotalUncompressedBytes => _responseTotalUncompressedBytes;
+        
         public UrlCache Cache { get; } = new();
 
         private readonly GraphQLHttpClient _graphQLClient;
@@ -181,7 +202,12 @@ namespace ApiClient.Runtime
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         E content = default;
-
+                        
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        var contentLength = Encoding.UTF8.GetByteCount(body);
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
+                        
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
                         if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" &&
@@ -291,8 +317,10 @@ namespace ApiClient.Runtime
                         }
                         
                         // This will be useful for debugging if compression is effective
-                        // var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        // var contentLength = body.Length;
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                        var contentLength = Encoding.UTF8.GetByteCount(body);
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
                         // Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
                         T content = default;
                         E error = default;
@@ -438,8 +466,8 @@ namespace ApiClient.Runtime
                         {
                             responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
                         }
-
-                        var contentLength = responseMessage.Content.Headers.ContentLength ?? 0L;
+                        
+                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
 
                         await Task.Run(async () =>
                         {
@@ -475,10 +503,10 @@ namespace ApiClient.Runtime
 
                                 if (_verboseLogging)
                                 {
-                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLength}.");
+                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
                                 }
 
-                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLength), _syncCtx);
+                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLengthFromHeader), _syncCtx);
                             }
                             while (isMoreToRead && !ct.IsCancellationRequested);
 
@@ -489,6 +517,10 @@ namespace ApiClient.Runtime
 
                             responseBytes = memoryStream.ToArray();
                         });
+                        
+                        var contentLength = responseBytes.Length;
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader);
 
                         response ??= new HttpResponse<byte[]>(
                                                             responseBytes,

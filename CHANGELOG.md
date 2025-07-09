@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.2.2]
+### Add
+- Added gathering stats for compressed and uncompressed received bytes in IApiClient
+
 ## [1.2.1]
 ### Add
 - IHttpResponse will now expose HttpMethod along with Uri

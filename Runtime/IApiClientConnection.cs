@@ -9,6 +9,7 @@ namespace ApiClient.Runtime
 {
     public interface IApiClientConnection
     {
+        IApiClient APIClient { get; }
         void SetDefaultHeader(string key, string value);
         HttpClientStreamRequest<T> CreateGetStreamRequest<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true);
         HttpClientByteArrayRequest CreateGetByteArrayRequest(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null);
