@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GraphQL.Client.Http;
@@ -186,7 +187,7 @@ namespace ApiClient.Runtime
                         E content = default;
                         
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        var contentLength = body.Length;
+                        var contentLength = Encoding.UTF8.GetByteCount(body);
                         ResponseTotalUncompressedBytes += contentLength;
                         ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
                         
@@ -300,7 +301,7 @@ namespace ApiClient.Runtime
                         
                         // This will be useful for debugging if compression is effective
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        var contentLength = body.Length;
+                        var contentLength = Encoding.UTF8.GetByteCount(body);
                         ResponseTotalUncompressedBytes += contentLength;
                         ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
                         // Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
