@@ -27,8 +27,10 @@ namespace ApiClient.Runtime
     
     public class ApiClient : IApiClient
     {
-        public long ResponseTotalCompressedBytes { get; private set; }
-        public long ResponseTotalUncompressedBytes { get; private set; }
+        private long _responseTotalCompressedBytes;
+        private long _responseTotalUncompressedBytes;
+        public long ResponseTotalCompressedBytes => _responseTotalCompressedBytes;
+        public long ResponseTotalUncompressedBytes => _responseTotalUncompressedBytes;
         
         public UrlCache Cache { get; } = new();
 
@@ -194,8 +196,8 @@ namespace ApiClient.Runtime
                         
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
                         var contentLength = Encoding.UTF8.GetByteCount(body);
-                        ResponseTotalUncompressedBytes += contentLength;
-                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
                         
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
@@ -308,8 +310,8 @@ namespace ApiClient.Runtime
                         // This will be useful for debugging if compression is effective
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
                         var contentLength = Encoding.UTF8.GetByteCount(body);
-                        ResponseTotalUncompressedBytes += contentLength;
-                        ResponseTotalCompressedBytes += contentLengthFromHeader ?? contentLength;
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
                         // Debug.Log($"Was {request.Uri} compressed: Content length from header: {contentLengthFromHeader}, content length from body: {contentLength} ({(contentLengthFromHeader / (float)contentLength):P})");
                         T content = default;
                         E error = default;
@@ -508,8 +510,8 @@ namespace ApiClient.Runtime
                         });
                         
                         var contentLength = responseBytes.Length;
-                        ResponseTotalCompressedBytes += contentLengthFromHeader;
-                        ResponseTotalUncompressedBytes += contentLength;
+                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader);
 
                         response ??= new HttpResponse<byte[]>(
                                                             responseBytes,
