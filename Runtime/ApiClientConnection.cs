@@ -15,7 +15,7 @@ namespace ApiClient.Runtime
     public class ApiClientConnection : IApiClientConnection
     {
         private readonly ApiClient _apiClient;
-        public ApiClient APIClient => _apiClient;
+        public IApiClient APIClient => _apiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;

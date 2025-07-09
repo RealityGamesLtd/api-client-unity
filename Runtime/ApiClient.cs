@@ -19,7 +19,13 @@ using UnityEngine;
 
 namespace ApiClient.Runtime
 {
-    public class ApiClient
+    public interface IApiClient
+    {
+        long ResponseTotalCompressedBytes { get; }
+        long ResponseTotalUncompressedBytes { get; }
+    }
+    
+    public class ApiClient : IApiClient
     {
         public long ResponseTotalCompressedBytes { get; private set; }
         public long ResponseTotalUncompressedBytes { get; private set; }
