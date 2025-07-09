@@ -22,11 +22,11 @@ namespace ApiClient.Runtime.HttpResponses
         public HttpStatusCode StatusCode { get; private set; }
         public string Body { get; private set; }
 
-        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
+        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestRequestUri, HttpStatusCode statusCode)
         {
             Message = errorMessage;
             Headers = headers.ToHeadersDictionary();
-            RequestUri = requestUri;
+            RequestUri = requestRequestUri;
             StatusCode = statusCode;
             ContentHeaders = contentHeaders.ToHeadersDictionary();
             Body = body;
@@ -40,11 +40,11 @@ namespace ApiClient.Runtime.HttpResponses
             RequestUri = request.RequestUri;
         }
 
-        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri uri)
+        public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri)
         {
             Message = errorMessage;
             Headers = headers.ToHeadersDictionary();
-            RequestUri = uri;
+            RequestUri = requestUri;
         }
     }
 }

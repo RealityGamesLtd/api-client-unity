@@ -23,9 +23,9 @@ namespace ApiClient.Runtime.HttpResponses
             RequestUri = request.RequestUri;
         }
 
-        public TimeoutHttpResponse(Uri uri)
+        public TimeoutHttpResponse(Uri requestUri)
         {
-            RequestUri = uri;
+            RequestUri = requestUri;
         }
     }
 }

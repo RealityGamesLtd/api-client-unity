@@ -122,7 +122,7 @@ namespace ApiClient.Runtime
                     catch (TaskCanceledException)
                     {
                         if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
+                            response = new AbortedHttpResponse(request.RequestMessage);
                         else
                             response = new TimeoutHttpResponse(request.RequestMessage);
                     }
@@ -137,7 +137,7 @@ namespace ApiClient.Runtime
             }
             catch (OperationCanceledException)
             {
-                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
+                response = new AbortedHttpResponse(req.RequestMessage);
             }
 
             return await _middleware.ProcessResponse(response, req.RequestId, true);
@@ -217,7 +217,7 @@ namespace ApiClient.Runtime
                     catch (TaskCanceledException)
                     {
                         if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
+                            response = new AbortedHttpResponse(request.RequestMessage);
                         else
                             response = new TimeoutHttpResponse(request.RequestMessage);
                     }
@@ -232,7 +232,7 @@ namespace ApiClient.Runtime
             }
             catch (OperationCanceledException)
             {
-                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
+                response = new AbortedHttpResponse(req.RequestMessage);
             }
 
             return await _middleware.ProcessResponse(response, req.RequestId, true);
@@ -351,7 +351,7 @@ namespace ApiClient.Runtime
                     catch (TaskCanceledException)
                     {
                         if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
+                            response = new AbortedHttpResponse(request.RequestMessage);
                         else
                             response = new TimeoutHttpResponse(request.RequestMessage);
                     }
@@ -366,7 +366,7 @@ namespace ApiClient.Runtime
             }
             catch (OperationCanceledException)
             {
-                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
+                response = new AbortedHttpResponse(req.RequestMessage);
             }
 
             return await _middleware.ProcessResponse(response, req.RequestId, true);
@@ -501,7 +501,7 @@ namespace ApiClient.Runtime
                     catch (TaskCanceledException)
                     {
                         if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage.RequestUri);
+                            response = new AbortedHttpResponse(request.RequestMessage);
                         else
                             response = new TimeoutHttpResponse(request.RequestMessage);
                     }
@@ -516,7 +516,7 @@ namespace ApiClient.Runtime
             }
             catch (OperationCanceledException)
             {
-                response = new AbortedHttpResponse(req.RequestMessage.RequestUri);
+                response = new AbortedHttpResponse(req.RequestMessage);
             }
 
             return await _middleware.ProcessResponse(response, req.RequestId, true);
@@ -746,7 +746,7 @@ namespace ApiClient.Runtime
                 {
                     // Task was aborted
                     OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
-                        new AbortedHttpResponse(request.RequestMessage.RequestUri),
+                        new AbortedHttpResponse(request.RequestMessage),
                         request.RequestId,
                         true),
                         _syncCtx);

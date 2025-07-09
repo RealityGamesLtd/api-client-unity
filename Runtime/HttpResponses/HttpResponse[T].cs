@@ -25,11 +25,11 @@ namespace ApiClient.Runtime.HttpResponses
             Body = body;
         }
         
-        public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri uri, HttpStatusCode statusCode)
+        public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
         {
             Content = content;
             Headers = headers.ToHeadersDictionary();
-            RequestUri = uri;
+            RequestUri = requestUri;
             StatusCode = statusCode;
             ContentHeaders = contentHeaders != null ? contentHeaders.ToHeadersDictionary() : new Dictionary<string, string>();
             Body = body;

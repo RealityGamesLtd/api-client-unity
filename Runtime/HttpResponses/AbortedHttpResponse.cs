@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using ApiClient.Runtime.Requests;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -17,9 +18,16 @@ namespace ApiClient.Runtime.HttpResponses
         public Dictionary<string, string> Headers { get; private set; } = null;
         public Dictionary<string, string> ContentHeaders { get; private set; } = null;
 
+        public AbortedHttpResponse(HttpRequestMessage request)
+        {
+            RequestMessage = request;
+            RequestUri = request.RequestUri;
+        }
+        
         public AbortedHttpResponse(Uri requestUri)
         {
             RequestUri = requestUri;
         }
+        
     }
 }

@@ -27,10 +27,10 @@ namespace ApiClient.Runtime.HttpResponses
             RequestUri = request.RequestUri;
         }
 
-        public NetworkErrorHttpResponse(string message, Uri uri)
+        public NetworkErrorHttpResponse(string message, Uri requestUri)
         {
             Message = message;
-            RequestUri = uri;
+            RequestUri = requestUri;
         }
     }
 }
