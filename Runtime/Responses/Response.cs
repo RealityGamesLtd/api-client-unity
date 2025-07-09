@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime
@@ -16,6 +17,7 @@ namespace ApiClient.Runtime
         public bool IsAborted { get; private set; }
         public bool IsTimeout { get; private set; }
         public bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout;
+        public HttpMethod RequestMethod { get; }
         public Uri RequestUri { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }
         public Dictionary<string, string> ContentHeaders { get; private set; }
@@ -33,6 +35,7 @@ namespace ApiClient.Runtime
             IsNetworkError = httpResponse.IsNetworkError;
             IsAborted = httpResponse.IsAborted;
             IsTimeout = httpResponse.IsTimeout;
+            RequestMethod = httpResponse.RequestMethod;
             RequestUri = httpResponse.RequestUri;
             Headers = httpResponse.Headers;
             ContentHeaders = httpResponse.ContentHeaders;

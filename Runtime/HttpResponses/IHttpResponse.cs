@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 
 namespace ApiClient.Runtime.HttpResponses
 {
@@ -41,6 +42,7 @@ namespace ApiClient.Runtime.HttpResponses
         /// </summary>
         bool HasNoErrors => !IsServerError && !IsClientError && !IsContentParsingError && !IsNetworkError && !IsAborted && !IsTimeout;
 
+        HttpMethod RequestMethod { get; }
         Uri RequestUri { get; }
         Dictionary<string, string> Headers { get; }
         Dictionary<string, string> ContentHeaders { get; }
