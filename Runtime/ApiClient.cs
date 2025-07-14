@@ -139,7 +139,6 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
-                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
@@ -240,7 +239,6 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
-                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
@@ -377,7 +375,6 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
-                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
