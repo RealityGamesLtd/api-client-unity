@@ -15,6 +15,6 @@ namespace ApiClient.Runtime
     public interface IApiClientMiddleware
     {
         Task ProcessRequest(IHttpRequest request, bool isResponseWithBackoff = false);
-        Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool isResponseWithBackoff = false);
+        Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool exhaustedRetries = false);
     }
 }

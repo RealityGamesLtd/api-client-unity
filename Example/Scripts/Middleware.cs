@@ -17,10 +17,10 @@ namespace ApiClientExample
             }
         }
 
-        public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool isResponseWithBackoff = false)
+        public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool exhaustedRetries = false)
         {
             // process only the ones without backoff included example -> every single request that's being made
-            if (!isResponseWithBackoff)
+            if (!exhaustedRetries)
             {
                 // logging example
                 LogResponse(response, requestId);

@@ -139,6 +139,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
+                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
@@ -239,6 +240,7 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
+                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
@@ -375,6 +377,7 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
+                        throw new TaskCanceledException();
                     }
                     catch (TaskCanceledException)
                     {
@@ -938,7 +941,7 @@ namespace ApiClient.Runtime
 
             }
 
-            public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool isResponseWithBackoff = false)
+            public async Task<IHttpResponse> ProcessResponse(IHttpResponse response, string requestId, bool exhaustedRetries = false)
             {
                 return response;
             }
