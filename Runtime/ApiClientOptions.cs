@@ -2,6 +2,7 @@ using System;
 using Polly.Retry;
 using ApiClient.Runtime.HttpResponses;
 using System.Net;
+using Utf8Json;
 
 namespace ApiClient.Runtime
 {
@@ -52,5 +53,6 @@ namespace ApiClient.Runtime
         public int StreamReadDeltaUpdateTime { get; set; } = 1000;
 
         public bool VerboseLogging { get; set; } = false;
+        public IJsonFormatterResolver JsonFormatterResolver { get; set; }
     }
 }

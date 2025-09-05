@@ -14,6 +14,7 @@ using ApiClient.Runtime.HttpResponses;
 using System.Threading;
 using ApiClient.Runtime.Cache;
 using UnityEngine;
+using Utf8Json;
 
 namespace ApiClient.Runtime
 {
@@ -29,6 +30,7 @@ namespace ApiClient.Runtime
         private readonly int _byteArrayBufferSize = 4096;
         private readonly bool _verboseLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
+        private readonly IJsonFormatterResolver _jsonFormatterResolver;
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
@@ -78,6 +80,8 @@ namespace ApiClient.Runtime
             }
 
             _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
+
+            _jsonFormatterResolver = options.JsonFormatterResolver ?? Utf8Json.Resolvers.StandardResolver.CamelCase;
         }
 
         /// <summary>
@@ -190,7 +194,7 @@ namespace ApiClient.Runtime
                             // try parsing content with provided content type
                             try
                             {
-                                content = JsonConvert.DeserializeObject<E>(body);
+                                content = Utf8Json.JsonSerializer.Deserialize<E>(body, Utf8Json.Resolvers.StandardResolver.CamelCase);
                             }
                             catch (Exception ex)
                             {
@@ -275,7 +279,7 @@ namespace ApiClient.Runtime
                     try
                     {
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
-                        var body = await responseMessage.Content.ReadAsStringAsync();
+                        var body = await responseMessage.Content.ReadAsByteArrayAsync();
                         T content = default;
                         E error = default;
 
@@ -284,7 +288,7 @@ namespace ApiClient.Runtime
                             // try parsing content with provided content type
                             try
                             {
-                                content = JsonConvert.DeserializeObject<T>(body);
+                                content = Utf8Json.JsonSerializer.Deserialize<T>(body, _jsonFormatterResolver);
                             }
                             catch (Exception ex)
                             {
@@ -294,7 +298,7 @@ namespace ApiClient.Runtime
                                     ex.ToString(),
                                     responseMessage.Headers,
                                     responseMessage.Content.Headers,
-                                    body,
+                                    System.Text.Encoding.UTF8.GetString(body),
                                     request.RequestMessage.RequestUri,
                                     responseMessage.StatusCode);
                             }
@@ -305,7 +309,7 @@ namespace ApiClient.Runtime
                                 // try parsing content with provided error type
                                 try
                                 {
-                                    error = JsonConvert.DeserializeObject<E>(body);
+                                    error = Utf8Json.JsonSerializer.Deserialize<E>(body, _jsonFormatterResolver);
                                 }
                                 catch (Exception)
                                 {
@@ -313,7 +317,7 @@ namespace ApiClient.Runtime
                                     // of parsing error response
                                 }
 
-                                if (error != null)
+                                if (error == null)
                                 {
                                     // do not propagate parsing error if we were able to get actuall error message
                                     response = null;
@@ -326,7 +330,7 @@ namespace ApiClient.Runtime
                                 error,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
-                                body,
+                                System.Text.Encoding.UTF8.GetString(body),
                                 request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode);
                     }
@@ -639,7 +643,7 @@ namespace ApiClient.Runtime
                                         T content = default;
                                         try
                                         {
-                                            content = JsonConvert.DeserializeObject<T>(jsonString);
+                                            content = Utf8Json.JsonSerializer.Deserialize<T>(jsonString, Utf8Json.Resolvers.StandardResolver.CamelCase);
 
                                             if (_verboseLogging)
                                             {

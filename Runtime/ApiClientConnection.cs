@@ -19,6 +19,7 @@ namespace ApiClient.Runtime
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
         private readonly UrlCache _urlCache = new();
+        private Utf8Json.IJsonFormatterResolver _jsonFormatterResolver;
 
         public ApiClientConnection(ApiClientOptions apiClientOptions)
         {
@@ -34,13 +35,18 @@ namespace ApiClient.Runtime
             }
             _defaultHeaders.Add(key, value);
         }
+        
+        public void SetJsonFormatterResolver(Utf8Json.IJsonFormatterResolver jsonFormatterResolver)
+        {
+            _jsonFormatterResolver = jsonFormatterResolver;
+        }
 
         public HttpClientRequest CreateGet(
             string url,
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true, 
+            bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null)
         {
             var request = new HttpClientRequest(
@@ -53,10 +59,10 @@ namespace ApiClient.Runtime
                 _urlCache,
                 cachePolicy,
                 () => this.CreateGet(
-                    url, 
-                    ct, 
-                    authentication, 
-                    headers, 
+                    url,
+                    ct,
+                    authentication,
+                    headers,
                     useDefaultHeaders))
             {
                 Authentication = authentication,

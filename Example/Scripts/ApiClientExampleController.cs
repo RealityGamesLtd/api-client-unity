@@ -56,15 +56,23 @@ namespace ApiClientExample
             responseText.text = "";
 
             // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
-            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
-                "https://httpstat.us/500", 
-                JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
-                _cts.Token);
-
-            // var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkxYTI3OS05MjI5LTQ3ZjQtYzFlYS00NjVkZmZiODQ2ZjUiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyNTAxNjQ2MiwiaWF0IjoxNzI1MDEyODYyfQ.0RpRFFmX4qKMCU30YfLpfxPXU7oqc_sNqEYVOa_l0oURStvLoawJa80v7sn00LYzW6qVPegR9Nkyds4ZVFqmxO--5ABtBBefCjqkGivgbE-vgh4nZDz2EvN0q9H91I3D1Nl0uxpOsPczwXw3Q8rHT6nQADeUjPDZ5LPfDBI4J_jrWPg_-HaAHf8iSpjH1DfIiCHLhSYya_s7UiPjQ6XyfR2Zosw2OtAXfUQrGA4GeHIwlJPy6CBNMlU3ff1Hj3SRnrtxR1d7wyuEAOCAGTR2ZW8t4Qz3jY1rSq4u82AZnCNHl5UYm6M3A1ZRmGVuv_VnIgwdSR8z68nAFZAhy_3HCXcdCNO_LyGzzrBajEcBh5S_R-mzKjjy5kEAUmYcDAarbBcsHycU_a73YDNkN_jPNw2xvl_g1Vj0ZqO4rNwHNgGeZaBc5TLFh_PwS5uM3CV83H3mdqNu8tg6aUn1UPu4rMHiM2SSAnYlxPkg6_eE-q4gFOzzOFmPdl6UZWH2eEIbhRFoKhHog9J-Xm7VZY7xGkScZe_j_NJIgulgdbuQHVs9JL-IV9n74zWNm7pPpHOc0U1yDH72pWoPPvKUXKTF_QjaaIEnp4EG7oklcOlIBZHCEn52cL60tO66kKNBHHMgGvhZumTcQ8_rNwaOcRe7dMDTR0P7ox5t5gFNNHfbZQI");
-            // var request = Session.Instance.ApiClientConnecton.CreatePost<Object, ServerErrorResponse>(
-            //     "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
+            //     "https://httpstat.us/500", 
             //     JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
+            //     _cts.Token);
+
+            var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTk3MWI4Ny1hYWQ1LWY0ZjQtZjlmYi0zMDg0MGM2OTAzMTciLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTc0ODUxNzE2NSwiaWF0IjoxNzQ4NTEzNTY1fQ.SX8PBxYOSwQMHSS3Uye1UUIWXNl7aBSnlbTJzKxIjOxyJOnpVxq530OajFk6HCkzLtXo_y1XkFt1QgfTp1ocf-1LYTaQD8wuvBrgE5k2NeR813_UqyC1tODCIXeTqlduSigxCcwHLnvQUGoxAjQCOiR5z-gwLeeaNJ6uOy1-m1n77QNDS4HhD7DkOTTgpi_yH6V4AQ3vRjkKLh1oOZWIzioS2_XTjQm2aCg-I1jds7-TOhBLDuaY7RkV2kOXgu6tzBlaOU_2gQkFpWyKCiMgZq1I3WV1me--_tfGJaSNtDMRIJo64lEFT5F1bcJllXpMe_n7n5j3EQyuCZVB0uMR83qdCXeytfClEdmr5BJkECdq8Sxld5u1tS4AS-ep-zgjcjftN1-DcPekIBVJFAEPQNtDI_db03PR2_eNAS11SVd9-0LyOiezsT5r5tgDLReoHRx5Bp5y63cFn3r6sZDEZGkRJx3qJx2f6NbTlC-3qRmQNGISRxgLD6TAEtMzPp2Dokq536ce786CY8Ng6d1tEc58pFJ4jQj2gDjR-XHWfUklh7gmIzSHdCyR8BtJ3s3XHSIsJxIZ9F0vSpsd2yJj8y-FtJPrS3XF8J7oiyY0slicE_fUu-7qaiqHblpofRgelgzvtWWV2FLsTVoI9-pF99VvGxkaa1elZ9ko0r_r_Do");
+            var request = Session.Instance.ApiClientConnecton.CreatePost<UnityEngine.Object, ServerErrorResponse>(
+                "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+                JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
+                _cts.Token,
+                authentication);
+
+
+            // var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTk3MWI4Ny1hYWQ1LWY0ZjQtZjlmYi0zMDg0MGM2OTAzMTciLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTc0ODUxNzE2NSwiaWF0IjoxNzQ4NTEzNTY1fQ.SX8PBxYOSwQMHSS3Uye1UUIWXNl7aBSnlbTJzKxIjOxyJOnpVxq530OajFk6HCkzLtXo_y1XkFt1QgfTp1ocf-1LYTaQD8wuvBrgE5k2NeR813_UqyC1tODCIXeTqlduSigxCcwHLnvQUGoxAjQCOiR5z-gwLeeaNJ6uOy1-m1n77QNDS4HhD7DkOTTgpi_yH6V4AQ3vRjkKLh1oOZWIzioS2_XTjQm2aCg-I1jds7-TOhBLDuaY7RkV2kOXgu6tzBlaOU_2gQkFpWyKCiMgZq1I3WV1me--_tfGJaSNtDMRIJo64lEFT5F1bcJllXpMe_n7n5j3EQyuCZVB0uMR83qdCXeytfClEdmr5BJkECdq8Sxld5u1tS4AS-ep-zgjcjftN1-DcPekIBVJFAEPQNtDI_db03PR2_eNAS11SVd9-0LyOiezsT5r5tgDLReoHRx5Bp5y63cFn3r6sZDEZGkRJx3qJx2f6NbTlC-3qRmQNGISRxgLD6TAEtMzPp2Dokq536ce786CY8Ng6d1tEc58pFJ4jQj2gDjR-XHWfUklh7gmIzSHdCyR8BtJ3s3XHSIsJxIZ9F0vSpsd2yJj8y-FtJPrS3XF8J7oiyY0slicE_fUu-7qaiqHblpofRgelgzvtWWV2FLsTVoI9-pF99VvGxkaa1elZ9ko0r_r_Do");
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<UnityEngine.Object, ServerErrorResponse>(
+            //     "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+            //     Utf8Json.JsonSerializer.Serialize(new RequestMatchmakingPostData(false)),
             //     _cts.Token,
             //     authentication);
 

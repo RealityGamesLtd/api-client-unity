@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
+using Utf8Json;
 
 namespace ApiClient.Runtime.Requests
 {
