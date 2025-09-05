@@ -33,14 +33,14 @@ namespace ApiClient.Runtime
         /// </summary>
         long ResponseTotalUncompressedBytes { get; }
     }
-    
+
     public class ApiClient : IApiClient
     {
         private long _responseTotalCompressedBytes;
         private long _responseTotalUncompressedBytes;
         public long ResponseTotalCompressedBytes => _responseTotalCompressedBytes;
         public long ResponseTotalUncompressedBytes => _responseTotalUncompressedBytes;
-        
+
         public UrlCache Cache { get; } = new();
 
         private readonly GraphQLHttpClient _graphQLClient;
@@ -202,12 +202,12 @@ namespace ApiClient.Runtime
                         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                         var body = await responseMessage.Content.ReadAsStringAsync();
                         E content = default;
-                        
+
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
                         var contentLength = Encoding.UTF8.GetByteCount(body);
                         Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
                         Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
-                        
+
                         // we can try to parse the error message only when there is correct media type and
                         // when we have received status code meant for errors
                         if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" &&
@@ -315,7 +315,7 @@ namespace ApiClient.Runtime
                             using var reader = new StreamReader(stream);
                             body = await reader.ReadToEndAsync();
                         }
-                        
+
                         // This will be useful for debugging if compression is effective
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
                         var contentLength = Encoding.UTF8.GetByteCount(body);
@@ -400,6 +400,93 @@ namespace ApiClient.Runtime
             return await _middleware.ProcessResponse(response, req.RequestId, true);
         }
 
+        public async Task<IHttpResponse> SendHeadersRequest(
+            HttpClientHeadersRequest req)
+        {
+            await _middleware.ProcessRequest(req, true);
+
+            IHttpResponse response = null;
+
+            try
+            {
+                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                {
+                    response = null;
+
+                    // if the request has been sent already we must recreate it as it's not
+                    // posible to send the same request message multiple times
+                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+
+                    // mark as sent as soon as the condition has been checked
+                    request.IsSent = true;
+
+                    await _middleware.ProcessRequest(request, false);
+
+                    try
+                    {
+                        using var responseMessage = await _httpClient.SendAsync(
+                            req.RequestMessage,
+                            HttpCompletionOption.ResponseHeadersRead,
+                            req.CancellationToken);
+
+                        req.IsSent = true;
+
+                        // read a stream only when 200 status code was returned
+                        if (!responseMessage.IsSuccessStatusCode)
+                        {
+                            if (_verboseLogging)
+                            {
+                                Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                            }
+
+                            // Handle non 2xx response
+                            response = new HttpResponse<byte[]>(
+                                default,
+                                responseMessage.Headers,
+                                null,
+                                null,
+                                req.RequestMessage,
+                                responseMessage.StatusCode);
+                            return response;
+                        }
+
+                        if (_verboseLogging)
+                        {
+                            Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                        }
+
+                        response ??= new HttpResponse<byte[]>(
+                            null,
+                            responseMessage.Headers,
+                            responseMessage.Content?.Headers,
+                            null,
+                            req.RequestMessage,
+                            responseMessage.StatusCode);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        if (request.CancellationToken.IsCancellationRequested)
+                            response = new AbortedHttpResponse(request.RequestMessage);
+                        else
+                            response = new TimeoutHttpResponse(request.RequestMessage);
+                    }
+                    catch (Exception ex)
+                    {
+                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
+                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
+                    }
+
+                    return await _middleware.ProcessResponse(response, req.RequestId, false);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+            }
+            catch (OperationCanceledException)
+            {
+                response = new AbortedHttpResponse(req.RequestMessage);
+            }
+
+            return await _middleware.ProcessResponse(response, req.RequestId, true);
+        }
+
         public async Task<IHttpResponse> SendByteArrayRequest(
             HttpClientByteArrayRequest req,
             Action<ByteArrayRequestProgress> progressCallback = null)
@@ -466,7 +553,7 @@ namespace ApiClient.Runtime
                         {
                             responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
                         }
-                        
+
                         var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
 
                         await Task.Run(async () =>
@@ -517,7 +604,7 @@ namespace ApiClient.Runtime
 
                             responseBytes = memoryStream.ToArray();
                         });
-                        
+
                         var contentLength = responseBytes.Length;
                         Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
                         Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader);
@@ -577,7 +664,7 @@ namespace ApiClient.Runtime
 
             // remove Accept-Encoding header to prevent automatic gzip compression
             request.RequestMessage.Headers.Remove("Accept-Encoding");
-            
+
             try
             {
                 request.IsSent = true;
@@ -770,7 +857,8 @@ namespace ApiClient.Runtime
                         }
                         while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
                     }, request.CancellationToken).ContinueWith(c => { }, request.CancellationToken);
-                };
+                }
+                ;
             }
             catch (OperationCanceledException)
             {
