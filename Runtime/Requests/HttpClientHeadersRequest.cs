@@ -124,7 +124,7 @@ namespace ApiClient.Runtime.Requests
             return await _apiClient.Cache.Process(
                 this,
                 _cachePolicy,
-                () => _apiClient.SendHeadersRequest(this));
+                () => _apiClient.SendHttpHeadersRequest(this));
         }
 
         public HttpClientHeadersRequest RecreateWithHttpRequestMessage()

@@ -582,7 +582,7 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientHeadersRequest CreateGetHeadersRequest(
+        public HttpClientHeadersRequest CreateGetHeadersOnlyRequest(
             string url,
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
@@ -599,7 +599,7 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGetHeadersRequest(
+                () => this.CreateGetHeadersOnlyRequest(
                     url,
                     ct,
                     authentication,
