@@ -504,147 +504,150 @@ namespace ApiClient.Runtime
             HttpClientByteArrayRequest req,
             Action<ByteArrayRequestProgress> progressCallback = null)
         {
-            await _middleware.ProcessRequest(req, true);
-
-            IHttpResponse response = null;
-
-            try
+            return await Task.Run(async () =>
             {
-                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                await _middleware.ProcessRequest(req, true);
+
+                IHttpResponse response = null;
+
+                try
                 {
-                    response = null;
-
-                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                    request.IsSent = true;
-
-                    await _middleware.ProcessRequest(request, false);
-
-                    try
+                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
                     {
-                        byte[] responseBytes = null;
+                        response = null;
 
-                        using var responseMessage = await _httpClient.SendAsync(
-                            req.RequestMessage,
-                            HttpCompletionOption.ResponseHeadersRead,
-                            req.CancellationToken);
+                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                        request.IsSent = true;
 
-                        req.IsSent = true;
+                        await _middleware.ProcessRequest(request, false);
 
-                        if (!responseMessage.IsSuccessStatusCode)
+                        try
                         {
-                            if (_verboseLogging)
+                            byte[] responseBytes = null;
+
+                            using var responseMessage = await _httpClient.SendAsync(
+                                req.RequestMessage,
+                                HttpCompletionOption.ResponseHeadersRead,
+                                req.CancellationToken);
+
+                            req.IsSent = true;
+
+                            if (!responseMessage.IsSuccessStatusCode)
                             {
-                                Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                                if (_verboseLogging)
+                                {
+                                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                                }
+
+                                response = new HttpResponse<byte[]>(
+                                    default,
+                                    responseMessage.Headers,
+                                    null,
+                                    null,
+                                    req.RequestMessage,
+                                    responseMessage.StatusCode);
+                                return response;
                             }
 
-                            response = new HttpResponse<byte[]>(
-                                default,
-                                responseMessage.Headers,
-                                null,
-                                null,
-                                req.RequestMessage,
-                                responseMessage.StatusCode);
-                            return response;
-                        }
+                            if (_verboseLogging)
+                            {
+                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                            }
 
-                        if (_verboseLogging)
-                        {
-                            Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
-                        }
+                            await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
+                            Stream responseStream = contentStream;
 
-                        await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                        Stream responseStream = contentStream;
+                            // decompress gzip stream if needed
+                            if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                            {
+                                responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
+                            }
 
-                        // decompress gzip stream if needed
-                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
-                        {
-                            responseStream = new GZipStream(contentStream, CompressionMode.Decompress);
-                        }
+                            var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
 
-                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
+                            var totalBytesRead = 0L;
+                            var buffer = new byte[_byteArrayBufferSize];
+                            var isMoreToRead = true;
 
-                        var totalBytesRead = 0L;
-                        var buffer = new byte[_byteArrayBufferSize];
-                        var isMoreToRead = true;
+                            using var memoryStream = new MemoryStream();
 
-                        using var memoryStream = new MemoryStream();
+                            do
+                            {
+                                if (req.CancellationToken.IsCancellationRequested)
+                                {
+                                    throw new TaskCanceledException();
+                                }
 
-                        do
-                        {
-                            if (req.CancellationToken.IsCancellationRequested)
+                                var bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
+                                if (bytesRead == 0)
+                                {
+                                    // Done!
+                                    isMoreToRead = false;
+
+                                    if (_verboseLogging)
+                                    {
+                                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                                    }
+
+                                    continue;
+                                }
+
+                                await memoryStream.WriteAsync(buffer, 0, bytesRead);
+                                totalBytesRead += bytesRead;
+
+                                if (_verboseLogging)
+                                {
+                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
+                                }
+
+                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLengthFromHeader), _syncCtx);
+                            }
+                            while (isMoreToRead && !ct.IsCancellationRequested);
+
+                            if (ct.IsCancellationRequested)
                             {
                                 throw new TaskCanceledException();
                             }
 
-                            var bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
-                            if (bytesRead == 0)
-                            {
-                                // Done!
-                                isMoreToRead = false;
+                            responseBytes = memoryStream.ToArray();
 
-                                if (_verboseLogging)
-                                {
-                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
-                                }
+                            var contentLength = responseBytes.Length;
+                            Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                            Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader);
 
-                                continue;
-                            }
-
-                            await memoryStream.WriteAsync(buffer, 0, bytesRead);
-                            totalBytesRead += bytesRead;
-
-                            if (_verboseLogging)
-                            {
-                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
-                            }
-
-                            progressCallback?.PostOnMainThread(new(totalBytesRead, contentLengthFromHeader), _syncCtx);
+                            response ??= new HttpResponse<byte[]>(
+                                responseBytes,
+                                responseMessage.Headers,
+                                responseMessage.Content?.Headers,
+                                null,
+                                req.RequestMessage,
+                                responseMessage.StatusCode);
                         }
-                        while (isMoreToRead && !ct.IsCancellationRequested);
-
-                        if (ct.IsCancellationRequested)
+                        catch (TaskCanceledException)
                         {
-                            throw new TaskCanceledException();
+                            if (request.CancellationToken.IsCancellationRequested)
+                                response = new AbortedHttpResponse(request.RequestMessage);
+                            else
+                                response = new TimeoutHttpResponse(request.RequestMessage);
+                        }
+                        catch (Exception ex)
+                        {
+                            var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
+                            response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
 
-                        responseBytes = memoryStream.ToArray();
+                        return await _middleware.ProcessResponse(response, request.RequestId, false);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                }
+                catch (OperationCanceledException)
+                {
+                    response = new AbortedHttpResponse(req.RequestMessage);
+                }
 
-                        var contentLength = responseBytes.Length;
-                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
-                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader);
-
-                        response ??= new HttpResponse<byte[]>(
-                            responseBytes,
-                            responseMessage.Headers,
-                            responseMessage.Content?.Headers,
-                            null,
-                            req.RequestMessage,
-                            responseMessage.StatusCode);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage);
-                        else
-                            response = new TimeoutHttpResponse(request.RequestMessage);
-                    }
-                    catch (Exception ex)
-                    {
-                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
-                    }
-
-                    return await _middleware.ProcessResponse(response, request.RequestId, false);
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
-            }
-            catch (OperationCanceledException)
-            {
-                response = new AbortedHttpResponse(req.RequestMessage);
-            }
-
-            IHttpResponse finalResponse = await _middleware.ProcessResponse(response, req.RequestId, true);
-            _syncCtx.Send(_ => { finalResponse = response; }, null);
-            return finalResponse;
+                IHttpResponse finalResponse = await _middleware.ProcessResponse(response, req.RequestId, true);
+                _syncCtx.Send(_ => { finalResponse = response; }, null);
+                return finalResponse;
+            }, req.CancellationToken);
         }
 
         /// <summary>
