@@ -591,7 +591,7 @@ namespace ApiClient.Runtime
             CachePolicy cachePolicy = null)
         {
             var request = new HttpClientHeadersRequest(
-                new HttpRequestMessage(HttpMethod.Get, url)
+                new HttpRequestMessage(HttpMethod.Head, url)
                 {
                     Version = _httpVersion
                 },
