@@ -56,17 +56,17 @@ namespace ApiClientExample
             responseText.text = "";
 
             // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
-            var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
-                "https://httpstat.us/500", 
-                JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
-                _cts.Token);
-
-            // var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkxYTI3OS05MjI5LTQ3ZjQtYzFlYS00NjVkZmZiODQ2ZjUiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyNTAxNjQ2MiwiaWF0IjoxNzI1MDEyODYyfQ.0RpRFFmX4qKMCU30YfLpfxPXU7oqc_sNqEYVOa_l0oURStvLoawJa80v7sn00LYzW6qVPegR9Nkyds4ZVFqmxO--5ABtBBefCjqkGivgbE-vgh4nZDz2EvN0q9H91I3D1Nl0uxpOsPczwXw3Q8rHT6nQADeUjPDZ5LPfDBI4J_jrWPg_-HaAHf8iSpjH1DfIiCHLhSYya_s7UiPjQ6XyfR2Zosw2OtAXfUQrGA4GeHIwlJPy6CBNMlU3ff1Hj3SRnrtxR1d7wyuEAOCAGTR2ZW8t4Qz3jY1rSq4u82AZnCNHl5UYm6M3A1ZRmGVuv_VnIgwdSR8z68nAFZAhy_3HCXcdCNO_LyGzzrBajEcBh5S_R-mzKjjy5kEAUmYcDAarbBcsHycU_a73YDNkN_jPNw2xvl_g1Vj0ZqO4rNwHNgGeZaBc5TLFh_PwS5uM3CV83H3mdqNu8tg6aUn1UPu4rMHiM2SSAnYlxPkg6_eE-q4gFOzzOFmPdl6UZWH2eEIbhRFoKhHog9J-Xm7VZY7xGkScZe_j_NJIgulgdbuQHVs9JL-IV9n74zWNm7pPpHOc0U1yDH72pWoPPvKUXKTF_QjaaIEnp4EG7oklcOlIBZHCEn52cL60tO66kKNBHHMgGvhZumTcQ8_rNwaOcRe7dMDTR0P7ox5t5gFNNHfbZQI");
-            // var request = Session.Instance.ApiClientConnecton.CreatePost<Object, ServerErrorResponse>(
-            //     "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
+            //     "https://httpstat.us/500", 
             //     JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
-            //     _cts.Token,
-            //     authentication);
+            //     _cts.Token);
+
+            var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTliMjczYi00YTRjLTFlOTEtNzJhZi0yYTBkZjc5NGU2YmEiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTc2NTg5MzM1NSwiaWF0IjoxNzY1ODg5NzU1fQ.gDfd4vvtlXw7iIzfRGLNmX5pTyKZTTgJ3G5drzbNmNCpEWqfJGG9nJf6nx-CX9I-g2cUsOlgZba8yd-LeESldb41WwRMm9onZHfmunp8UBVg1akJ4TdzD79ITdIFtoYypzuZIUY44XbblbiTEm1_PuLivJU9BM4QGkBcnvTyB8oa1cetBIsTyFwFgmwkWjRsX8r6l7KozaUUJIBgCFfB-0s-zV_cXI2dVzf09V-yiSWByNsJGAC5Ew3DwlSOjlQF1mkXkDS-dRIHgjYbN3ZaLXlAID9JBtCctKibLPwyYddTWjwAMLjcXKoNxUQIdmUNIY5i44sP3QHnwGANtd4hEyVO_z3m0NabS3ExQ7j06iW8NIs-uT1KO9EpQLLKuVirX_VH17N1F004mnRiyU5AY0R5XpohoPVOW3IlpwMeFA48zwTyVhF493MQ971v4kHYTyCXkLnRvcTpmFMm6pmhruHL_fOYsup0enxSg5KJid-I1mtqg65QJ8CT2zxrlhJH6_GFI9MpWu8k54PXH5cssxeFdMQ80_SRLs40yR5-x7OBHsqzJy_9N_MLD9OU74Fw_T-4a6TOXt7nqoa_LUDkuiksVbotPE8z2iCkrHLT1PQdfYjZOPx40QrbGvQOlnBALGiOynnISzZ0wZ3WxOoGLz7mT27GyXQ1mrIYVqGz2NQ");
+            var request = Session.Instance.ApiClientConnecton.CreatePost<System.Object, ServerErrorResponse>(
+                "https://pvp.mwodev.r10s.r5y.io/matchmaking",
+                JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
+                _cts.Token,
+                authentication);
 
             var httpResponse = await request.Send();
             var response = new ResponseWithContent<LrtResponse<AnonRegisterResponse>, ResponseErrorCode>(httpResponse);

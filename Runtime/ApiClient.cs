@@ -16,6 +16,8 @@ using ApiClient.Runtime.HttpResponses;
 using System.Threading;
 using ApiClient.Runtime.Cache;
 using UnityEngine;
+using ApiClient.Assets.ApiClient.Runtime.Utils;
+using UnityEngine.Profiling;
 
 namespace ApiClient.Runtime
 {
@@ -50,6 +52,7 @@ namespace ApiClient.Runtime
         private readonly int _streamReadDeltaUpdateTime = 1000;
         private readonly int _byteArrayBufferSize = 4096;
         private readonly bool _verboseLogging;
+        private readonly bool _bodyLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
             .Handle<HttpRequestException>()
@@ -87,6 +90,9 @@ namespace ApiClient.Runtime
 
             // assign verbose logging
             _verboseLogging = options.VerboseLogging;
+
+            // assign body logging
+            _bodyLogging = options.BodyLogging;
 
             if (Uri.IsWellFormedUriString(options.GraphQLClientEndpoint, UriKind.Absolute))
             {
@@ -181,90 +187,157 @@ namespace ApiClient.Runtime
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<E>(HttpClientRequest<E> req)
         {
-            await _middleware.ProcessRequest(req, true);
-
-            IHttpResponse response = null;
-
-            try
+            // start the whole operation in a separate thread
+            var result = await Task.Run(async () =>
             {
-                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                await _middleware.ProcessRequest(req, true);
+
+                IHttpResponse response = null;
+
+                try
                 {
-                    response = null;
-
-                    // if the request has been sent already we must recreate it as it's not
-                    // posible to send the same request message multiple times
-                    var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-
-                    // mark as sent as soon as the condition has been checked
-                    request.IsSent = true;
-
-                    await _middleware.ProcessRequest(request, false);
-
-                    try
+                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
                     {
-                        using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
-                        var body = await responseMessage.Content.ReadAsStringAsync();
-                        E content = default;
+                        response = null;
 
-                        var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                        var contentLength = Encoding.UTF8.GetByteCount(body);
-                        Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
-                        Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
+                        // if the request has been sent already we must recreate it as it's not
+                        // posible to send the same request message multiple times
+                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
 
-                        // we can try to parse the error message only when there is correct media type and
-                        // when we have received status code meant for errors
-                        if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json" &&
-                            (int)responseMessage.StatusCode > 400)
+                        // mark as sent as soon as the condition has been checked
+                        request.IsSent = true;
+
+                        await _middleware.ProcessRequest(request, false);
+
+                        Profiler.BeginSample($"Api Client Execute Request [E]: {request.Uri}");
+
+                        try
                         {
-                            // try parsing content with provided content type
-                            try
+                            using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+                            var body = string.Empty;
+                            E error = default;
+                            await using var stream = await responseMessage.Content.ReadAsStreamAsync();
+
+                            if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
                             {
-                                content = JsonConvert.DeserializeObject<E>(body);
+                                // Buffer the stream so we can deserialize multiple times
+                                using var memoryStream = new MemoryStream();
+                                await stream.CopyToAsync(memoryStream);
+                                memoryStream.Position = 0;
+
+                                // try parsing content with provided content type
+                                try
+                                {
+                                    // if parsing content was unsuccessful then try to parse it as error
+                                    if ((int)responseMessage.StatusCode > 400)
+                                    {
+                                        // try parsing content with provided error type
+                                        try
+                                        {
+                                            Stream errorJsonStream = memoryStream;
+                                            if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                                            {
+                                                errorJsonStream = new GZipStream(errorJsonStream, CompressionMode.Decompress);
+                                            }
+
+                                            Profiler.BeginSample("Api Client Error Deserialization [E]");
+                                            using var errorCountingStream = new CountingStream(errorJsonStream);
+                                            using var errorReader = new StreamReader(errorCountingStream, Encoding.UTF8, true, 1024, leaveOpen: true);
+                                            using var errorJsonReader = new JsonTextReader(errorReader);
+                                            {
+                                                error = JsonSerializer.CreateDefault().Deserialize<E>(errorJsonReader);
+                                            }
+                                            Profiler.EndSample();
+
+                                            // Metrics: Extract contentLength from the stream counter instead of the body string
+                                            var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                                            var contentLength = errorCountingStream.BytesRead;
+
+                                            Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                                            // Use uncompressed count as fallback if header is missing (consistent with previous logic)
+                                            Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
+
+                                        }
+                                        catch (Exception)
+                                        {
+                                            // do nothing with this exception as we don't want to propagate an error
+                                            // of parsing error response
+                                        }
+
+                                        if (error != null)
+                                        {
+                                            // do not propagate parsing error if we were able to get actual error message
+                                            response = null;
+                                        }
+                                    }
+
+                                    // read body for logging/debugging purposes
+                                    if (_bodyLogging)
+                                    {
+                                        Profiler.BeginSample("Api Client Body Read [E]");
+                                        memoryStream.Position = 0;
+                                        Stream bodyJsonStream = memoryStream;
+                                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                                        {
+                                            bodyJsonStream = new GZipStream(bodyJsonStream, CompressionMode.Decompress);
+                                        }
+                                        using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
+                                        body = await bodyStreamReader.ReadToEndAsync();
+                                        Profiler.EndSample();
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // if unsuccessfull ->
+                                    // return parsing error from content parsing so we can process it later
+                                    response = new ParsingErrorHttpResponse(
+                                        ex.ToString(),
+                                        responseMessage.Headers,
+                                        responseMessage.Content.Headers,
+                                        body,
+                                        request.RequestMessage.RequestUri,
+                                        responseMessage.StatusCode);
+                                }
                             }
-                            catch (Exception ex)
-                            {
-                                // if unsuccessfull ->
-                                // return parsing error from content parsing so we can process it later
-                                response = new ParsingErrorHttpResponse(
-                                    ex.ToString(),
+
+                            response ??= new HttpResponse<E>(
+                                    error,
                                     responseMessage.Headers,
-                                    responseMessage.Content.Headers,
+                                    responseMessage.Content?.Headers,
                                     body,
-                                    request.RequestMessage.RequestUri,
+                                    request.RequestMessage,
                                     responseMessage.StatusCode);
-                            }
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            if (request.CancellationToken.IsCancellationRequested)
+                                response = new AbortedHttpResponse(request.RequestMessage);
+                            else
+                                response = new TimeoutHttpResponse(request.RequestMessage);
+                        }
+                        catch (Exception ex)
+                        {
+                            var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
+                            response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
 
-                        response ??= new HttpResponse<E>(
-                                content,
-                                responseMessage.Headers,
-                                responseMessage.Content?.Headers,
-                                body,
-                                request.RequestMessage,
-                                responseMessage.StatusCode);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        if (request.CancellationToken.IsCancellationRequested)
-                            response = new AbortedHttpResponse(request.RequestMessage);
-                        else
-                            response = new TimeoutHttpResponse(request.RequestMessage);
-                    }
-                    catch (Exception ex)
-                    {
-                        var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
-                        response = new NetworkErrorHttpResponse(message, request.RequestMessage);
-                    }
+                        Profiler.EndSample();
 
-                    return await _middleware.ProcessResponse(response, request.RequestId, false);
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
-            }
-            catch (OperationCanceledException)
-            {
-                response = new AbortedHttpResponse(req.RequestMessage);
-            }
+                        return await _middleware.ProcessResponse(response, request.RequestId, false);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                }
+                catch (OperationCanceledException)
+                {
+                    response = new AbortedHttpResponse(req.RequestMessage);
+                }
 
-            return await _middleware.ProcessResponse(response, req.RequestId, true);
+                return await _middleware.ProcessResponse(response, req.RequestId, true);
+            }, req.CancellationToken);
+
+            // switch to original synchronization context to return the result
+            IHttpResponse finalResponse = null;
+            _syncCtx.Send(_ => { finalResponse = result; }, null);
+            return finalResponse;
         }
 
         /// <summary>
@@ -304,39 +377,99 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
+                        Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
                             var body = string.Empty;
                             await using var stream = await responseMessage.Content.ReadAsStreamAsync();
-                            // decompress gzip stream if needed
-                            if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
-                            {
-                                await using var decompressedStream = new GZipStream(stream, CompressionMode.Decompress);
-                                using var reader = new StreamReader(decompressedStream);
-                                body = await reader.ReadToEndAsync();
-                            }
-                            else
-                            {
-                                using var reader = new StreamReader(stream);
-                                body = await reader.ReadToEndAsync();
-                            }
-
-                            // This will be useful for debugging if compression is effective
-                            var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
-                            var contentLength = Encoding.UTF8.GetByteCount(body);
-                            Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
-                            Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
 
                             T content = default;
                             E error = default;
 
                             if (responseMessage?.Content?.Headers?.ContentType?.MediaType == "application/json")
                             {
+                                // Buffer the stream so we can deserialize multiple times
+                                using var memoryStream = new MemoryStream();
+                                await stream.CopyToAsync(memoryStream);
+                                memoryStream.Position = 0;
+
                                 // try parsing content with provided content type
                                 try
                                 {
-                                    content = JsonConvert.DeserializeObject<T>(body);
+                                    Stream jsonStream = memoryStream;
+                                    if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                                    {
+                                        jsonStream = new GZipStream(jsonStream, CompressionMode.Decompress);
+                                    }
+
+                                    // Wrap the stream to count bytes as they are read
+                                    // read content using counting stream to get accurate byte count
+                                    Profiler.BeginSample("Api Client Content Deserialization");
+                                    using var countingStream = new CountingStream(jsonStream);
+                                    using var reader = new StreamReader(countingStream, Encoding.UTF8, true, 1024, leaveOpen: true);
+                                    using var jsonReader = new JsonTextReader(reader);
+                                    {
+                                        content = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
+                                    }
+                                    Profiler.EndSample();
+
+                                    // if parsing content was unsuccessful then try to parse it as error
+                                    if (content == null || (int)responseMessage.StatusCode > 400)
+                                    {
+                                        // try parsing content with provided error type
+                                        try
+                                        {
+                                            Stream errorJsonStream = memoryStream;
+                                            if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                                            {
+                                                errorJsonStream = new GZipStream(errorJsonStream, CompressionMode.Decompress);
+                                            }
+
+                                            Profiler.BeginSample("Api Client Error Deserialization");
+                                            using var errorCountingStream = new CountingStream(errorJsonStream);
+                                            using var errorReader = new StreamReader(errorCountingStream, Encoding.UTF8, true, 1024, leaveOpen: true);
+                                            using var errorJsonReader = new JsonTextReader(errorReader);
+                                            {
+                                                error = JsonSerializer.CreateDefault().Deserialize<E>(errorJsonReader);
+                                            }
+                                            Profiler.EndSample();
+                                        }
+                                        catch (Exception)
+                                        {
+                                            // do nothing with this exception as we don't want to propagate an error
+                                            // of parsing error response
+                                        }
+
+                                        if (error != null)
+                                        {
+                                            // do not propagate parsing error if we were able to get actual error message
+                                            response = null;
+                                        }
+                                    }
+
+                                    // Metrics: Extract contentLength from the stream counter instead of the body string
+                                    var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength;
+                                    var contentLength = countingStream.BytesRead;
+
+                                    Interlocked.Add(ref _responseTotalUncompressedBytes, contentLength);
+                                    // Use uncompressed count as fallback if header is missing (consistent with previous logic)
+                                    Interlocked.Add(ref _responseTotalCompressedBytes, contentLengthFromHeader ?? contentLength);
+
+                                    // read body for logging/debugging purposes
+                                    if (_bodyLogging)
+                                    {
+                                        Profiler.BeginSample("Api Client Body Read");
+                                        memoryStream.Position = 0;
+                                        Stream bodyJsonStream = memoryStream;
+                                        if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
+                                        {
+                                            bodyJsonStream = new GZipStream(bodyJsonStream, CompressionMode.Decompress);
+                                        }
+                                        using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
+                                        body = await bodyStreamReader.ReadToEndAsync();
+                                        Profiler.EndSample();
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
@@ -349,27 +482,6 @@ namespace ApiClient.Runtime
                                         body,
                                         request.RequestMessage.RequestUri,
                                         responseMessage.StatusCode);
-                                }
-
-                                // if parsing content was unsuccessful then try to parse it as error
-                                if (content == null || (int)responseMessage.StatusCode > 400)
-                                {
-                                    // try parsing content with provided error type
-                                    try
-                                    {
-                                        error = JsonConvert.DeserializeObject<E>(body);
-                                    }
-                                    catch (Exception)
-                                    {
-                                        // do nothing with this exception as we don't want to propagate an error
-                                        // of parsing error response
-                                    }
-
-                                    if (error != null)
-                                    {
-                                        // do not propagate parsing error if we were able to get actual error message
-                                        response = null;
-                                    }
                                 }
                             }
 
@@ -394,6 +506,8 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
+
+                        Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
@@ -863,7 +977,8 @@ namespace ApiClient.Runtime
                             }
                         }
                         while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
-                    };
+                    }
+                    ;
                 }
                 catch (OperationCanceledException)
                 {

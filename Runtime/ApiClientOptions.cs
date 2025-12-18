@@ -52,5 +52,11 @@ namespace ApiClient.Runtime
         public int StreamReadDeltaUpdateTime { get; set; } = 1000;
 
         public bool VerboseLogging { get; set; } = false;
+        
+        /// <summary>
+        /// Enable gathering body for logging purposes.
+        /// </summary>
+        /// <value></value>
+        public bool BodyLogging { get; set; } = false;
     }
 }
