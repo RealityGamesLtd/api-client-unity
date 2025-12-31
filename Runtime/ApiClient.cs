@@ -20,7 +20,7 @@ using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime
 {
-    public partial class ApiClient : IApiClient
+    public class ApiClient : IApiClient
     {
         private long _responseTotalCompressedBytes;
         private long _responseTotalUncompressedBytes;

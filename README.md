@@ -245,9 +245,6 @@ AotEnsureTypes.EnsureTypes();
 ### NuGetForUnity
 https://github.com/GlitchEnzo/NuGetForUnity
 
-### GrahpQL Client
-https://github.com/graphql-dotnet/graphql-client
-
 ### Polly
 https://github.com/App-vNext/Polly
 
