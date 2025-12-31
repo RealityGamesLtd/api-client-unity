@@ -68,12 +68,12 @@ namespace ApiClient.Runtime.Requests
             }
         }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
 
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientStreamRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientStreamRequest(HttpRequestMessage requestMessage, IApiClient apiClient, CancellationToken ct)
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;

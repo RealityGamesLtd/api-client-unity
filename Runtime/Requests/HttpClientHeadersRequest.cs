@@ -71,7 +71,7 @@ namespace ApiClient.Runtime.Requests
             }
         }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
         private readonly Func<HttpClientHeadersRequest> _recreateFunc;
         private readonly CachePolicy _cachePolicy;
         private readonly UrlCache _urlCache;
@@ -81,7 +81,7 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientHeadersRequest(
             HttpRequestMessage requestMessage,
-            ApiClient apiClient,
+            IApiClient apiClient,
             CancellationToken ct,
             UrlCache urlCache,
             CachePolicy cachePolicy,
