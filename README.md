@@ -243,8 +243,11 @@ https://github.com/GlitchEnzo/NuGetForUnity
 ### Polly
 https://github.com/App-vNext/Polly
 
-### Polly WaitAndRetry
+### Polly.Contrib.WaitAndRetry
 https://github.com/Polly-Contrib/Polly.Contrib.WaitAndRetry
+
+### Polly.Extensions.Http
+https://github.com/App-vNext/Polly.Extensions.Http
 
 ### Newtonsoft.Json-for-Unity
 https://github.com/jilleJr/Newtonsoft.Json-for-Unity
