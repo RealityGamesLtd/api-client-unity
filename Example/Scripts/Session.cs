@@ -61,5 +61,35 @@ namespace ApiClientExample
                             context["RetryAttempt"] = retryAttempt;
                         }),
             });
+
+        public readonly IApiClientConnection MockApiClientConnecton = new ApiClientConnection(
+            new ApiClientOptions()
+            {
+                GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
+                Timeout = TimeSpan.FromSeconds(10),
+                Middleware = new Middleware(),
+                RetryPolicy = Policy
+                    .Handle<HttpRequestException>()
+                    .OrResult<IHttpResponse>(r =>
+                    {
+                        var validStatusCode = false;
+                        if (r is IHttpResponseStatusCode responseWithStatusCode)
+                        {
+                            validStatusCode = _httpStatusCodesWorthRetrying.Contains(responseWithStatusCode.StatusCode);
+                        }
+                        return r.IsTimeout ||
+                            r.IsNetworkError ||
+                            validStatusCode;
+                    })
+                    // Exponential Backoff
+                    .WaitAndRetryAsync(
+                        Backoff.DecorrelatedJitterBackoffV2(medianFirstRetryDelay: TimeSpan.FromSeconds(1), retryCount: 2),
+                        (response, delay, retryAttempt, context) =>
+                        {
+                            // Logic to be executed before each retry
+                            context["RetryAttempt"] = retryAttempt;
+                        }),
+            }, 
+            new ApiClientMock());
     }
 }

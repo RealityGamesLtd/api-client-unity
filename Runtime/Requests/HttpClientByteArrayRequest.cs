@@ -71,7 +71,7 @@ namespace ApiClient.Runtime.Requests
             }
         }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
         private readonly Func<HttpClientByteArrayRequest> _recreateFunc;
         private readonly CachePolicy _cachePolicy;
         private readonly UrlCache _urlCache;
@@ -81,7 +81,7 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientByteArrayRequest(
             HttpRequestMessage requestMessage,
-            ApiClient apiClient,
+            IApiClient apiClient,
             CancellationToken ct,
             UrlCache urlCache,
             CachePolicy cachePolicy,
@@ -98,7 +98,7 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientByteArrayRequest(
             HttpRequestMessage requestMessage,
-            ApiClient apiClient,
+            IApiClient apiClient,
             CancellationToken ct)
         {
             RequestMessage = requestMessage;

@@ -12,7 +12,7 @@ namespace ApiClient.Runtime.Requests
 {
     public class GraphQLClientRequest<T> : GraphQLHttpRequest, IHttpRequest
     {
-        public GraphQLClientRequest(ApiClient apiClient, CancellationToken cancellationToken) : base()
+        public GraphQLClientRequest(IApiClient apiClient, CancellationToken cancellationToken) : base()
         {
             CancellationToken = cancellationToken;
             _apiClient = apiClient;
@@ -28,7 +28,7 @@ namespace ApiClient.Runtime.Requests
         public Dictionary<string, string> DefaultHeaders { private get; set; }
         public Dictionary<string, string> Headers { private get; set; }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
 
         public override HttpRequestMessage ToHttpRequestMessage(GraphQLHttpClientOptions options, IGraphQLJsonSerializer serializer)
         {

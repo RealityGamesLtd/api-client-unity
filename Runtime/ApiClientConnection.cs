@@ -14,16 +14,16 @@ namespace ApiClient.Runtime
     /// </summary>
     public class ApiClientConnection : IApiClientConnection
     {
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
         public IApiClient APIClient => _apiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
         private readonly UrlCache _urlCache = new();
 
-        public ApiClientConnection(ApiClientOptions apiClientOptions)
+        public ApiClientConnection(ApiClientOptions apiClientOptions, IApiClient apiClient = null)
         {
-            _apiClient = new ApiClient(apiClientOptions);
+            _apiClient = apiClient ?? new ApiClient(apiClientOptions);
             _httpVersion = apiClientOptions.Version;
         }
 
