@@ -13,11 +13,6 @@ namespace ApiClient.Runtime
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
 
         /// <summary>
-        /// Base GraphQl endpoint url.
-        /// </summary>
-        public string GraphQLClientEndpoint { get; set; }
-
-        /// <summary>
         /// Custom retry policy to set the rules of what happens when requests fail.
         /// </summary>
         public AsyncRetryPolicy<IHttpResponse> RetryPolicy { get; set; }

@@ -36,7 +36,6 @@ namespace ApiClientExample
         public readonly IApiClientConnection ApiClientConnecton = new ApiClientConnection(
             new ApiClientOptions()
             {
-                GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
                 Timeout = TimeSpan.FromSeconds(10),
                 Middleware = new Middleware(),
                 RetryPolicy = Policy
@@ -65,7 +64,6 @@ namespace ApiClientExample
         public readonly IApiClientConnection MockApiClientConnecton = new ApiClientConnection(
             new ApiClientOptions()
             {
-                GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
                 Timeout = TimeSpan.FromSeconds(10),
                 Middleware = new Middleware(),
                 RetryPolicy = Policy

@@ -18,7 +18,6 @@ namespace ApiClient.Runtime
         public Func<HttpClientHeadersRequest, Task<IHttpResponse>> SendHttpHeadersRequestFunc { get; set; }
         public Func<HttpClientByteArrayRequest, Action<ByteArrayRequestProgress>, Task<IHttpResponse>> SendByteArrayRequestFunc { get; set; }
         public Func<HttpClientStreamRequest<object>, Action<IHttpResponse>, Action<TimeSpan>, Task> SendStreamRequestFunc { get; set; }
-        public Func<GraphQLClientRequest<object>, Task<IHttpResponse>> SendGraphQLRequestFunc { get; set; }
 
         public UrlCache Cache { get; } = new UrlCache();
 
@@ -62,13 +61,6 @@ namespace ApiClient.Runtime
             if (SendHttpRequestDoubleGenericFunc != null)
                 return SendHttpRequestDoubleGenericFunc(req as HttpClientRequest<object, object>);
             throw new NotImplementedException("Mock response not set for SendHttpRequest<T, E>");
-        }
-
-        public Task<IHttpResponse> SendGraphQLRequest<T>(GraphQLClientRequest<T> graphQLRequest)
-        {
-            if (SendGraphQLRequestFunc != null)
-                return SendGraphQLRequestFunc(graphQLRequest as GraphQLClientRequest<object>);
-            throw new NotImplementedException("Mock response not set for SendGraphQLRequest");
         }
     }
 }
