@@ -371,7 +371,7 @@ namespace ApiClient.Runtime
                                     Stream jsonStream = memoryStream;
                                     if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
                                     {
-                                        jsonStream = new GZipStream(jsonStream, CompressionMode.Decompress);
+                                        jsonStream = new GZipStream(jsonStream, CompressionMode.Decompress, leaveOpen: true);
                                     }
 
                                     // Wrap the stream to count bytes as they are read
@@ -385,6 +385,8 @@ namespace ApiClient.Runtime
                                     }
                                     Profiler.EndSample();
 
+                                    CountingStream errorCountingStream = null;
+
                                     // if parsing content was unsuccessful then try to parse it as error
                                     if (content == null || (int)responseMessage.StatusCode > 400)
                                     {
@@ -394,13 +396,13 @@ namespace ApiClient.Runtime
                                             Stream errorJsonStream = memoryStream;
                                             if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
                                             {
-                                                errorJsonStream = new GZipStream(errorJsonStream, CompressionMode.Decompress);
+                                                errorJsonStream = new GZipStream(errorJsonStream, CompressionMode.Decompress, leaveOpen: true);
                                             }
 
                                             Profiler.BeginSample("Api Client Error Deserialization");
-                                            using var errorCountingStream = new CountingStream(errorJsonStream);
+                                            errorCountingStream = new CountingStream(errorJsonStream);
                                             using var errorReader = new StreamReader(errorCountingStream, Encoding.UTF8, true, 1024, leaveOpen: true);
-                                            using var errorJsonReader = new JsonTextReader(errorReader);
+                                            using var errorJsonReader = new JsonTextReader(errorReader) { CloseInput = false };
                                             {
                                                 error = JsonSerializer.CreateDefault().Deserialize<E>(errorJsonReader);
                                             }
@@ -435,7 +437,7 @@ namespace ApiClient.Runtime
                                         Stream bodyJsonStream = memoryStream;
                                         if (responseMessage.Content.Headers.ContentEncoding.Contains("gzip"))
                                         {
-                                            bodyJsonStream = new GZipStream(bodyJsonStream, CompressionMode.Decompress);
+                                            bodyJsonStream = new GZipStream(bodyJsonStream, CompressionMode.Decompress, leaveOpen: true);
                                         }
                                         using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
                                         body = await bodyStreamReader.ReadToEndAsync();
