@@ -29,7 +29,7 @@ namespace ApiClient.Tests
             {
                 Timeout = TimeSpan.FromSeconds(10),
                 Middleware = null,
-                RetryPolicy = Policy
+                RetryPolicies = Policy.WrapAsync(Policy
                     .Handle<HttpRequestException>()
                     .OrResult<IHttpResponse>(r =>
                     {
@@ -49,7 +49,8 @@ namespace ApiClient.Tests
                         {
                             // Logic to be executed before each retry
                             context["RetryAttempt"] = retryAttempt;
-                        }),
+                        })
+                ),
                 VerboseLogging = false,
             });
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
 using System.Threading;
 using ApiClient.Runtime.Cache;
+using Polly.Wrap;
 using UnityEngine;
 
 namespace ApiClient.Runtime
@@ -51,19 +53,7 @@ namespace ApiClient.Runtime
         private readonly int _byteArrayBufferSize = 4096;
         private readonly bool _verboseLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
-        private readonly AsyncRetryPolicy<IHttpResponse> _retryPolicy = Policy
-            .Handle<HttpRequestException>()
-            .OrResult<IHttpResponse>(r =>
-                r.IsTimeout ||
-                r.IsNetworkError)
-            // Exponential Backoff
-            .WaitAndRetryAsync(
-                retryCount: 0,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetry: (response, timeSpan) =>
-                {
-                    // Additional logic to be executed before each retry
-                });
+        private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
 
         public ApiClient(ApiClientOptions options)
         {
@@ -77,7 +67,7 @@ namespace ApiClient.Runtime
             _middleware = options.Middleware ?? new DefaultApiClientMiddleware();
 
             // assign custom retry policy
-            _retryPolicy = options.RetryPolicy;
+            _retryPolicies = options.RetryPolicies;
 
             // assign stream buffer size
             _streamBufferSize = options.StreamBufferSize;
@@ -120,12 +110,18 @@ namespace ApiClient.Runtime
 
                 try
                 {
-                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                    await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
                         response = null;
 
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
+                        
+                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        {
+                            request.Authentication = newAuthHeaderValue;
+                            context["newAuthenticationHeaderValue"] = null;
+                        }
 
                         await _middleware.ProcessRequest(request, false);
 
@@ -152,7 +148,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -187,7 +183,7 @@ namespace ApiClient.Runtime
 
             try
             {
-                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                await _retryPolicies.ExecuteAsync(async (context, ct) =>
                 {
                     response = null;
 
@@ -197,6 +193,12 @@ namespace ApiClient.Runtime
 
                     // mark as sent as soon as the condition has been checked
                     request.IsSent = true;
+
+                    if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                    {
+                        request.Authentication = newAuthHeaderValue;
+                        context["newAuthenticationHeaderValue"] = null;
+                    }
 
                     await _middleware.ProcessRequest(request, false);
 
@@ -257,7 +259,7 @@ namespace ApiClient.Runtime
                     }
 
                     return await _middleware.ProcessResponse(response, request.RequestId, false);
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, req.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
@@ -291,7 +293,7 @@ namespace ApiClient.Runtime
 
                 try
                 {
-                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                    await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
                         response = null;
 
@@ -301,6 +303,12 @@ namespace ApiClient.Runtime
 
                         // mark as sent as soon as the condition has been checked
                         request.IsSent = true;
+                        
+                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        {
+                            request.Authentication = newAuthHeaderValue;
+                            context["newAuthenticationHeaderValue"] = null;
+                        }
 
                         await _middleware.ProcessRequest(request, false);
 
@@ -396,7 +404,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -423,12 +431,18 @@ namespace ApiClient.Runtime
 
                 try
                 {
-                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                    await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
                         response = null;
 
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
+                        
+                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        {
+                            request.Authentication = newAuthHeaderValue;
+                            context["newAuthenticationHeaderValue"] = null;
+                        }
 
                         await _middleware.ProcessRequest(request, false);
 
@@ -485,7 +499,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -512,12 +526,18 @@ namespace ApiClient.Runtime
 
                 try
                 {
-                    await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                    await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
                         response = null;
 
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
+                        
+                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        {
+                            request.Authentication = newAuthHeaderValue;
+                            context["newAuthenticationHeaderValue"] = null;
+                        }
 
                         await _middleware.ProcessRequest(request, false);
 
@@ -637,7 +657,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -933,7 +953,7 @@ namespace ApiClient.Runtime
 
             try
             {
-                await _retryPolicy.ExecuteAsync(async (c, ct) =>
+                await _retryPolicies.ExecuteAsync(async (c, ct) =>
                 {
                     graphQLRequest.IsSent = true;
 
@@ -1007,7 +1027,7 @@ namespace ApiClient.Runtime
 
                     return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
 
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient } }, graphQLRequest.CancellationToken, true);
+                }, new Dictionary<string, object>() { { "httpClient", _httpClient }, {"newAuthenticationHeaderValue", null} }, graphQLRequest.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
