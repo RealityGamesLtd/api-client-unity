@@ -169,10 +169,10 @@ else
 }
 ```
 
-## Retry policy
+## Retry policies
 By default each request will be sent only once.
-To specify the exact rules of how the retry policy should
-look like pass custom policy when creating `IApiClientConnection` instance.
+To specify the exact rules of how the retry policies should
+look like pass custom policy wrapper when creating `IApiClientConnection` instance.
 ```csharp
 private static HttpStatusCode[] httpStatusCodesWorthRetrying = {
             HttpStatusCode.RequestTimeout, // 408
@@ -186,7 +186,7 @@ private readonly IApiClientConnection apiClientConnection = new ApiClientConnect
     {
         GraphQLClientEndpoint = "url",
         Timeout = TimeSpan.FromSeconds(10),
-        RetryPolicy = Policy
+        RetryPolicies = Policy.WrapAsync(Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
             {
@@ -206,7 +206,7 @@ private readonly IApiClientConnection apiClientConnection = new ApiClientConnect
                 (response, timeSpan) =>
                 {
                     // Logic to be executed before each retry
-                }),
+                })),
     });
 ```
 
@@ -217,6 +217,11 @@ IApiClientConnection instance.
 var authentication = new AuthenticationHeaderValue("Bearer", "Token");
 var request = _apiClientConnection.CreateGet<T>("url", cts.Token, authentication: authentication);
 ```
+Additionally it's possible to change authentication header inside retry policy by setting context's ```newAuthenticationHeaderValue``` field. It can be used for refreshing auth token before request retry.
+```csharp
+context["newAuthenticationHeaderValue"] = new AuthenticationHeaderValue("Bearer", "Token");
+```
+
 
 ## GZip Compression
 GZip compression is supported by default. To enable it, set the `Accept-Encoding: gzip` header as a default header in the `ApiClientConnection` instance.
