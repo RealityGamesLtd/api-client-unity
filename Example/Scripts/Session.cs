@@ -88,7 +88,7 @@ namespace ApiClientExample
                 GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
                 Timeout = TimeSpan.FromSeconds(10),
                 Middleware = new Middleware(),
-                RetryPolicy = Policy
+                RetryPolicies = Policy.WrapAsync(Policy
                     .Handle<HttpRequestException>()
                     .OrResult<IHttpResponse>(r =>
                     {
@@ -109,6 +109,23 @@ namespace ApiClientExample
                             // Logic to be executed before each retry
                             context["RetryAttempt"] = retryAttempt;
                         }),
+                        Policy
+                    .HandleResult<IHttpResponse>(r =>
+                    {
+                        if (r is IHttpResponseStatusCode responseWithStatusCode)
+                        {
+                            return responseWithStatusCode.StatusCode == (HttpStatusCode)401;
+                        }
+                        return false;
+                    })
+                    .WaitAndRetryAsync(Backoff.DecorrelatedJitterBackoffV2(
+                        medianFirstRetryDelay: TimeSpan.FromSeconds(1),
+                        retryCount: 2),
+                        (response, delay, retryAttempt, context) =>
+                    {
+                        context["newAuthenticationHeaderValue"] = authenticationHeaderValue;
+                    })
+                )
             }, 
             new ApiClientMock());
     }
