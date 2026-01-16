@@ -39,7 +39,7 @@ namespace ApiClientExample
                 GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
                 Timeout = TimeSpan.FromSeconds(10),
                 Middleware = new Middleware(),
-                RetryPolicy = Policy
+                RetryPolicies = Policy.WrapAsync(Policy
                     .Handle<HttpRequestException>()
                     .OrResult<IHttpResponse>(r =>
                     {
@@ -59,7 +59,8 @@ namespace ApiClientExample
                         {
                             // Logic to be executed before each retry
                             context["RetryAttempt"] = retryAttempt;
-                        }),
+                        })
+                )
             });
     }
 }
