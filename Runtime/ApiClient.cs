@@ -1008,11 +1008,8 @@ namespace ApiClient.Runtime
 
             try
             {
-                // Try to deserialize content
-                content = DeserializeJson<T>(memoryStream, responseMessage.Content.Headers, "Api Client Content Deserialization", out var contentBytesRead);
-
-                // If content parsing failed or status code indicates error, try to parse error
-                if (content == null || (int)responseMessage.StatusCode > 400)
+                // If status code indicates error, prioritize error deserialization
+                if ((int)responseMessage.StatusCode >= 400)
                 {
                     try
                     {
@@ -1026,6 +1023,8 @@ namespace ApiClient.Runtime
                 }
                 else
                 {
+                    // Try to deserialize content for success status codes
+                    content = DeserializeJson<T>(memoryStream, responseMessage.Content.Headers, "Api Client Content Deserialization", out var contentBytesRead);
                     UpdateResponseMetrics(contentBytesRead, responseMessage.Content.Headers.ContentLength);
                 }
 
@@ -1066,7 +1065,7 @@ namespace ApiClient.Runtime
 
             try
             {
-                if ((int)responseMessage.StatusCode > 400)
+                if ((int)responseMessage.StatusCode >= 400)
                 {
                     try
                     {

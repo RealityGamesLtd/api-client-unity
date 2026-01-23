@@ -30,7 +30,7 @@ namespace Tests
             {
                 Timeout = TimeSpan.FromSeconds(30),
                 VerboseLogging = false,
-                BodyLogging = true
+                BodyLogging = false  // Disable body logging for tests
             };
             _apiClient = new ApiClientTestable(_options);
         }
@@ -48,7 +48,7 @@ namespace Tests
         {
             // Arrange
             var originalStream = new MemoryStream(Encoding.UTF8.GetBytes("test data"));
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
 
             // Act
             var resultStream = _apiClient.TestPrepareJsonStream(originalStream, headers);
@@ -62,8 +62,7 @@ namespace Tests
         {
             // Arrange
             var originalStream = new MemoryStream();
-            var headers = new HttpContentHeaders();
-            headers.ContentEncoding.Add("gzip");
+            var headers = GetContentHeaders(addGzip: true);
 
             // Act
             var resultStream = _apiClient.TestPrepareJsonStream(originalStream, headers);
@@ -77,7 +76,7 @@ namespace Tests
         {
             // Arrange
             var originalStream = new MemoryStream();
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
             headers.ContentEncoding.Add("deflate");
             headers.ContentEncoding.Add("gzip");
 
@@ -99,7 +98,7 @@ namespace Tests
             var testObject = new TestModel { Id = 123, Name = "Test" };
             var json = JsonConvert.SerializeObject(testObject);
             var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
 
             // Act
             var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead);
@@ -117,7 +116,7 @@ namespace Tests
             // Arrange
             var invalidJson = "{ invalid json }";
             var stream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
 
             // Act & Assert
             Assert.Throws<JsonReaderException>(() =>
@@ -131,7 +130,7 @@ namespace Tests
         {
             // Arrange
             var stream = new MemoryStream();
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
 
             // Act
             var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead);
@@ -156,8 +155,7 @@ namespace Tests
             }
             
             compressedStream.Position = 0;
-            var headers = new HttpContentHeaders();
-            headers.ContentEncoding.Add("gzip");
+            var headers = GetContentHeaders(addGzip: true);
 
             // Act
             var result = _apiClient.TestDeserializeJson<TestModel>(compressedStream, headers, "Test Label", out var bytesRead);
@@ -179,7 +177,7 @@ namespace Tests
             // Arrange
             var bodyContent = "Test body content";
             var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
             _apiClient.SetBodyLogging(true);
 
             // Act
@@ -195,7 +193,7 @@ namespace Tests
             // Arrange
             var bodyContent = "Test body content";
             var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
-            var headers = new HttpContentHeaders();
+            var headers = GetContentHeaders();
             _apiClient.SetBodyLogging(false);
 
             // Act
@@ -219,8 +217,7 @@ namespace Tests
             }
             
             compressedStream.Position = 0;
-            var headers = new HttpContentHeaders();
-            headers.ContentEncoding.Add("gzip");
+            var headers = GetContentHeaders(addGzip: true);
             _apiClient.SetBodyLogging(true);
 
             // Act
@@ -297,19 +294,19 @@ namespace Tests
             // Arrange
             var testContent = new TestModel { Id = 789, Name = "Content" };
             var json = JsonConvert.SerializeObject(testContent);
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
 
             // Act
-            var (content, error, body, errorResponse) = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
+            var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNotNull(content);
-            Assert.AreEqual(789, content.Id);
-            Assert.AreEqual("Content", content.Name);
-            Assert.IsNull(error);
-            Assert.IsNull(errorResponse);
+            Assert.IsNotNull(result.content);
+            Assert.AreEqual(789, result.content.Id);
+            Assert.AreEqual("Content", result.content.Name);
+            Assert.IsNull(result.error);
+            Assert.IsNull(result.errorResponse);
         }
 
         [Test]
@@ -318,37 +315,37 @@ namespace Tests
             // Arrange
             var testError = new ErrorModel { Code = "ERR001", Message = "Error occurred" };
             var json = JsonConvert.SerializeObject(testError);
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.BadRequest);
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage(json, HttpStatusCode.BadRequest);
 
             // Act
-            var (content, error, body, errorResponse) = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
+            var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNull(content);
-            Assert.IsNotNull(error);
-            Assert.AreEqual("ERR001", error.Code);
-            Assert.AreEqual("Error occurred", error.Message);
-            Assert.IsNull(errorResponse);
+            Assert.IsNull(result.content);
+            Assert.IsNotNull(result.error);
+            Assert.AreEqual("ERR001", result.error.Code);
+            Assert.AreEqual("Error occurred", result.error.Message);
+            Assert.IsNull(result.errorResponse);
         }
 
         [Test]
         public async Task ProcessJsonResponse_WithNonJsonContent_ReturnsEmpty()
         {
             // Arrange
-            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.OK, "text/plain");
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.OK, "text/plain");
 
             // Act
-            var (content, error, body, errorResponse) = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
+            var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNull(content);
-            Assert.IsNull(error);
-            Assert.AreEqual(string.Empty, body);
-            Assert.IsNull(errorResponse);
+            Assert.IsNull(result.content);
+            Assert.IsNull(result.error);
+            Assert.AreEqual(string.Empty, result.body);
+            Assert.IsNull(result.errorResponse);
         }
 
         [Test]
@@ -356,18 +353,18 @@ namespace Tests
         {
             // Arrange
             var invalidJson = "{ invalid json structure";
-            var responseMessage = CreateResponseMessage(invalidJson, HttpStatusCode.OK);
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage(invalidJson, HttpStatusCode.OK);
 
             // Act
-            var (content, error, body, errorResponse) = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
+            var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNull(content);
-            Assert.IsNull(error);
-            Assert.IsNotNull(errorResponse);
-            Assert.IsInstanceOf<ParsingErrorHttpResponse>(errorResponse);
+            Assert.IsNull(result.content);
+            Assert.IsNull(result.error);
+            Assert.IsNotNull(result.errorResponse);
+            Assert.IsInstanceOf<ParsingErrorHttpResponse>(result.errorResponse);
         }
 
         #endregion
@@ -380,18 +377,18 @@ namespace Tests
             // Arrange
             var testError = new ErrorModel { Code = "ERR002", Message = "Server error" };
             var json = JsonConvert.SerializeObject(testError);
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.InternalServerError);
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage(json, HttpStatusCode.InternalServerError);
 
             // Act
-            var (error, body, errorResponse) = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
+            var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNotNull(error);
-            Assert.AreEqual("ERR002", error.Code);
-            Assert.AreEqual("Server error", error.Message);
-            Assert.IsNull(errorResponse);
+            Assert.IsNotNull(result.error);
+            Assert.AreEqual("ERR002", result.error.Code);
+            Assert.AreEqual("Server error", result.error.Message);
+            Assert.IsNull(result.errorResponse);
         }
 
         [Test]
@@ -399,33 +396,33 @@ namespace Tests
         {
             // Arrange
             var json = JsonConvert.SerializeObject(new ErrorModel { Code = "OK", Message = "Success" });
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
 
             // Act
-            var (error, body, errorResponse) = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
+            var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNull(error);
-            Assert.IsNull(errorResponse);
+            Assert.IsNull(result.error);
+            Assert.IsNull(result.errorResponse);
         }
 
         [Test]
         public async Task ProcessJsonErrorResponse_WithNonJsonContent_ReturnsEmpty()
         {
             // Arrange
-            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.BadRequest, "text/plain");
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.BadRequest, "text/plain");
 
             // Act
-            var (error, body, errorResponse) = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
+            var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
                 responseMessage, requestMessage);
 
             // Assert
-            Assert.IsNull(error);
-            Assert.AreEqual(string.Empty, body);
-            Assert.IsNull(errorResponse);
+            Assert.IsNull(result.error);
+            Assert.AreEqual(string.Empty, result.body);
+            Assert.IsNull(result.errorResponse);
         }
 
         #endregion
@@ -439,6 +436,16 @@ namespace Tests
                 Content = new StringContent(content, Encoding.UTF8, contentType)
             };
             return response;
+        }
+
+        private HttpContentHeaders GetContentHeaders(string content = "", bool addGzip = false)
+        {
+            var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
+            if (addGzip)
+            {
+                httpContent.Headers.ContentEncoding.Add("gzip");
+            }
+            return httpContent.Headers;
         }
 
         #endregion
@@ -463,7 +470,7 @@ namespace Tests
     /// <summary>
     /// Testable version of ApiClient that exposes helper methods for testing
     /// </summary>
-    public class ApiClientTestable : ApiClient
+    public class ApiClientTestable : ApiClient.Runtime.ApiClient
     {
         public ApiClientTestable(ApiClientOptions options) : base(options)
         {
@@ -506,7 +513,7 @@ namespace Tests
         public void SetBodyLogging(bool enabled)
         {
             // Use reflection to set the private field
-            var field = typeof(ApiClient).GetField("_bodyLogging", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var field = typeof(ApiClient.Runtime.ApiClient).GetField("_bodyLogging", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             field?.SetValue(this, enabled);
         }
     }
