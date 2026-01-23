@@ -16,8 +16,8 @@ using System.Threading;
 using ApiClient.Runtime.Cache;
 using Polly.Wrap;
 using UnityEngine;
-using ApiClient.Assets.ApiClient.Runtime.Utils;
 using UnityEngine.Profiling;
+using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime
 {
@@ -147,9 +147,12 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            IHttpResponse finalResponse = null;
-            _syncCtx.Send(_ => { finalResponse = result; }, null);
-            return finalResponse;
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            if (req.CancellationToken.CanBeCanceled)
+                req.CancellationToken.Register(() => tcs.TrySetCanceled(req.CancellationToken));
+
+            _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+            return await tcs.Task;
         }
 
         /// <summary>
@@ -322,9 +325,12 @@ namespace ApiClient.Runtime
             }, req.CancellationToken);
 
             // switch to original synchronization context to return the result
-            IHttpResponse finalResponse = null;
-            _syncCtx.Send(_ => { finalResponse = result; }, null);
-            return finalResponse;
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            if (req.CancellationToken.CanBeCanceled)
+                req.CancellationToken.Register(() => tcs.TrySetCanceled(req.CancellationToken));
+
+            _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+            return await tcs.Task;
         }
 
         /// <summary>
@@ -514,9 +520,12 @@ namespace ApiClient.Runtime
             }, req.CancellationToken);
 
             // switch to original synchronization context to return the result
-            IHttpResponse finalResponse = null;
-            _syncCtx.Send(_ => { finalResponse = result; }, null);
-            return finalResponse;
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            if (req.CancellationToken.CanBeCanceled)
+                req.CancellationToken.Register(() => tcs.TrySetCanceled(req.CancellationToken));
+
+            _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+            return await tcs.Task;
         }
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(
@@ -608,9 +617,12 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            IHttpResponse finalResponse = null;
-            _syncCtx.Send(_ => { finalResponse = result; }, null);
-            return finalResponse;
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            if (req.CancellationToken.CanBeCanceled)
+                req.CancellationToken.Register(() => tcs.TrySetCanceled(req.CancellationToken));
+
+            _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+            return await tcs.Task;
         }
 
         public async Task<IHttpResponse> SendByteArrayRequest(
@@ -763,9 +775,13 @@ namespace ApiClient.Runtime
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
 
-                IHttpResponse finalResponse = await _middleware.ProcessResponse(response, req.RequestId, true);
-                _syncCtx.Send(_ => { finalResponse = response; }, null);
-                return finalResponse;
+                IHttpResponse result = await _middleware.ProcessResponse(response, req.RequestId, true);
+                var tcs = new TaskCompletionSource<IHttpResponse>();
+                if (req.CancellationToken.CanBeCanceled)
+                    req.CancellationToken.Register(() => tcs.TrySetCanceled(req.CancellationToken));
+
+                _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+                return await tcs.Task;
             }, req.CancellationToken);
         }
 

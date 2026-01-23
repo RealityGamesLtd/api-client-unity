@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime.Requests
 {

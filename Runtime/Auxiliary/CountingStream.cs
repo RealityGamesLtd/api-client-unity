@@ -3,8 +3,12 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ApiClient.Assets.ApiClient.Runtime.Utils
+namespace ApiClient.Runtime.Auxiliary
 {
+    /// <summary>
+    /// A stream wrapper that counts the number of bytes read.
+    /// It delegates all operations to the inner stream while keeping track of the total bytes read.
+    /// </summary>
     public class CountingStream : Stream
     {
         private readonly Stream _inner;
@@ -33,12 +37,12 @@ namespace ApiClient.Assets.ApiClient.Runtime.Utils
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var read = await _inner.ReadAsync(buffer, offset, count, cancellationToken);
+            var read = await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
             BytesRead += read;
             return read;
         }
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
         {
             var read = await _inner.ReadAsync(buffer, cancellationToken);
             BytesRead += read;

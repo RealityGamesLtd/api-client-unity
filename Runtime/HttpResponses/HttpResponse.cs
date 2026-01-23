@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using ApiClient.Runtime.Auxiliary;
 using ApiClient.Runtime.Cache;
 
 namespace ApiClient.Runtime.HttpResponses

@@ -34,7 +34,10 @@ namespace ApiClientExample
                 HttpStatusCode.GatewayTimeout // 504
             };
 
-        public static AuthenticationHeaderValue authenticationHeaderValue = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTliMjczYi00YTRjLTFlOTEtNzJhZi0yYTBkZjc5NGU2YmEiLCJyb2xlIjoidGVzdGVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTc2NTg5MzM1NSwiaWF0IjoxNzY1ODg5NzU1fQ.gDfd4vvtlXw7iIzfRGLNmX5pTyKZTTgJ3G5drzbNmNCpEWqfJGG9nJf6nx-CX9I-g2cUsOlgZba8yd-LeESldb41WwRMm9onZHfmunp8UBVg1akJ4TdzD79ITdIFtoYypzuZIUY44XbblbiTEm1_PuLivJU9BM4QGkBcnvTyB8oa1cetBIsTyFwFgmwkWjRsX8r6l7KozaUUJIBgCFfB-0s-zV_cXI2dVzf09V-yiSWByNsJGAC5Ew3DwlSOjlQF1mkXkDS-dRIHgjYbN3ZaLXlAID9JBtCctKibLPwyYddTWjwAMLjcXKoNxUQIdmUNIY5i44sP3QHnwGANtd4hEyVO_z3m0NabS3ExQ7j06iW8NIs-uT1KO9EpQLLKuVirX_VH17N1F004mnRiyU5AY0R5XpohoPVOW3IlpwMeFA48zwTyVhF493MQ971v4kHYTyCXkLnRvcTpmFMm6pmhruHL_fOYsup0enxSg5KJid-I1mtqg65QJ8CT2zxrlhJH6_GFI9MpWu8k54PXH5cssxeFdMQ80_SRLs40yR5-x7OBHsqzJy_9N_MLD9OU74Fw_T-4a6TOXt7nqoa_LUDkuiksVbotPE8z2iCkrHLT1PQdfYjZOPx40QrbGvQOlnBALGiOynnISzZ0wZ3WxOoGLz7mT27GyXQ1mrIYVqGz2NQ");
+        public static readonly AuthenticationHeaderValue authenticationHeaderValue = new("Bearer", "your_token_here");
+
+        private const string RETRY_ATTEMPT_CONTEXT_KEY = "RetryAttempt";
+        private const string NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY = "newAuthenticationHeaderValue";
 
         public readonly IApiClientConnection ApiClientConnecton = new ApiClientConnection(
             new ApiClientOptions()
@@ -61,7 +64,7 @@ namespace ApiClientExample
                         (response, delay, retryAttempt, context) =>
                         {
                             // Logic to be executed before each retry
-                            context["RetryAttempt"] = retryAttempt;
+                            context[RETRY_ATTEMPT_CONTEXT_KEY] = retryAttempt;
                         }),
                         Policy
                     .HandleResult<IHttpResponse>(r =>
@@ -77,7 +80,7 @@ namespace ApiClientExample
                         retryCount: 2),
                         (response, delay, retryAttempt, context) =>
                     {
-                        context["newAuthenticationHeaderValue"] = authenticationHeaderValue;
+                        context[NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY] = authenticationHeaderValue;
                     })
                 )
             });
@@ -107,7 +110,7 @@ namespace ApiClientExample
                         (response, delay, retryAttempt, context) =>
                         {
                             // Logic to be executed before each retry
-                            context["RetryAttempt"] = retryAttempt;
+                            context[RETRY_ATTEMPT_CONTEXT_KEY] = retryAttempt;
                         }),
                         Policy
                     .HandleResult<IHttpResponse>(r =>
@@ -123,7 +126,7 @@ namespace ApiClientExample
                         retryCount: 2),
                         (response, delay, retryAttempt, context) =>
                     {
-                        context["newAuthenticationHeaderValue"] = authenticationHeaderValue;
+                        context[NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY] = authenticationHeaderValue;
                     })
                 )
             }, 
