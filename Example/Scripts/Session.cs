@@ -84,52 +84,5 @@ namespace ApiClientExample
                     })
                 )
             });
-
-        public readonly IApiClientConnection MockApiClientConnecton = new ApiClientConnection(
-            new ApiClientOptions()
-            {
-                GraphQLClientEndpoint = "https://spacex-production.up.railway.app/",
-                Timeout = TimeSpan.FromSeconds(10),
-                Middleware = new Middleware(),
-                RetryPolicies = Policy.WrapAsync(Policy
-                    .Handle<HttpRequestException>()
-                    .OrResult<IHttpResponse>(r =>
-                    {
-                        var validStatusCode = false;
-                        if (r is IHttpResponseStatusCode responseWithStatusCode)
-                        {
-                            validStatusCode = _httpStatusCodesWorthRetrying.Contains(responseWithStatusCode.StatusCode);
-                        }
-                        return r.IsTimeout ||
-                            r.IsNetworkError ||
-                            validStatusCode;
-                    })
-                    // Exponential Backoff
-                    .WaitAndRetryAsync(
-                        Backoff.DecorrelatedJitterBackoffV2(medianFirstRetryDelay: TimeSpan.FromSeconds(1), retryCount: 2),
-                        (response, delay, retryAttempt, context) =>
-                        {
-                            // Logic to be executed before each retry
-                            context[RETRY_ATTEMPT_CONTEXT_KEY] = retryAttempt;
-                        }),
-                        Policy
-                    .HandleResult<IHttpResponse>(r =>
-                    {
-                        if (r is IHttpResponseStatusCode responseWithStatusCode)
-                        {
-                            return responseWithStatusCode.StatusCode == (HttpStatusCode)401;
-                        }
-                        return false;
-                    })
-                    .WaitAndRetryAsync(Backoff.DecorrelatedJitterBackoffV2(
-                        medianFirstRetryDelay: TimeSpan.FromSeconds(1),
-                        retryCount: 2),
-                        (response, delay, retryAttempt, context) =>
-                    {
-                        context[NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY] = authenticationHeaderValue;
-                    })
-                )
-            }, 
-            new ApiClientMock());
     }
 }
