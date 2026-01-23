@@ -440,7 +440,7 @@ namespace Tests
 
         private HttpContentHeaders GetContentHeaders(string content = "", bool addGzip = false)
         {
-            var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
+            using var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
             if (addGzip)
             {
                 httpContent.Headers.ContentEncoding.Add("gzip");
