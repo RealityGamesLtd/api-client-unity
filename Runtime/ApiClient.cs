@@ -40,6 +40,8 @@ namespace ApiClient.Runtime
         private readonly bool _bodyLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
+        private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
+        private const string HttpClientKey = "httpClient";
 
         public ApiClient(ApiClientOptions options)
         {
@@ -106,10 +108,10 @@ namespace ApiClient.Runtime
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
 
-                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
                             request.Authentication = newAuthHeaderValue;
-                            context["newAuthenticationHeaderValue"] = null;
+                            context[NewAuthenticationHeaderValueKey] = null;
                         }
 
                         await _middleware.ProcessRequest(request, false);
@@ -137,7 +139,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -179,10 +181,10 @@ namespace ApiClient.Runtime
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
 
-                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
                             request.Authentication = newAuthHeaderValue;
-                            context["newAuthenticationHeaderValue"] = null;
+                            context[NewAuthenticationHeaderValueKey] = null;
                         }
 
                         await _middleware.ProcessRequest(request, false);
@@ -219,7 +221,7 @@ namespace ApiClient.Runtime
                         Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -262,10 +264,10 @@ namespace ApiClient.Runtime
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
 
-                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
                             request.Authentication = newAuthHeaderValue;
-                            context["newAuthenticationHeaderValue"] = null;
+                            context[NewAuthenticationHeaderValueKey] = null;
                         }
 
                         await _middleware.ProcessRequest(request, false);
@@ -302,7 +304,7 @@ namespace ApiClient.Runtime
                         Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -332,10 +334,10 @@ namespace ApiClient.Runtime
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
 
-                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
                             request.Authentication = newAuthHeaderValue;
-                            context["newAuthenticationHeaderValue"] = null;
+                            context[NewAuthenticationHeaderValueKey] = null;
                         }
 
                         await _middleware.ProcessRequest(request, false);
@@ -393,7 +395,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -425,10 +427,10 @@ namespace ApiClient.Runtime
                         var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
                         request.IsSent = true;
 
-                        if (context["newAuthenticationHeaderValue"] is AuthenticationHeaderValue newAuthHeaderValue)
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
                             request.Authentication = newAuthHeaderValue;
-                            context["newAuthenticationHeaderValue"] = null;
+                            context[NewAuthenticationHeaderValueKey] = null;
                         }
 
                         await _middleware.ProcessRequest(request, false);
@@ -539,7 +541,7 @@ namespace ApiClient.Runtime
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -909,7 +911,7 @@ namespace ApiClient.Runtime
 
                     return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
 
-                }, new Dictionary<string, object>() { { "httpClient", _httpClient }, { "newAuthenticationHeaderValue", null } }, graphQLRequest.CancellationToken, true);
+                }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, graphQLRequest.CancellationToken, true);
             }
             catch (OperationCanceledException)
             {
