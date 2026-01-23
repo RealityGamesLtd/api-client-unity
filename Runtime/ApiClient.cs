@@ -953,7 +953,6 @@ namespace ApiClient.Runtime
             memoryStream.Position = 0;
             var jsonStream = PrepareJsonStream(memoryStream, headers);
 
-            var stopwatch = Diagnostics.Stopwatch.StartNew();
             Profiler.BeginSample(profilerLabel);
             try
             {
@@ -962,12 +961,6 @@ namespace ApiClient.Runtime
                 using var jsonReader = new JsonTextReader(reader);
                 var result = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
                 bytesRead = countingStream.BytesRead;
-                
-                stopwatch.Stop();
-                // if (_verboseLogging)
-                // {
-                    UnityEngine.Debug.Log($"{nameof(ApiClient)}:{nameof(DeserializeJson)} Deserialization took {stopwatch.ElapsedMilliseconds}ms for type {typeof(T).Name}");
-                // }
                 
                 return result;
             }
