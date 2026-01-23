@@ -42,6 +42,7 @@ namespace ApiClient.Runtime
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
+        private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
 
         public ApiClient(ApiClientOptions options)
         {
@@ -585,6 +586,8 @@ namespace ApiClient.Runtime
 
                     await _middleware.ProcessRequest(request, true);
 
+                    Profiler.BeginSample($"Api Client Execute Stream Request: {request.Uri}");
+
                     using var responseMessage = await _httpClient.SendAsync(
                         request.RequestMessage,
                         HttpCompletionOption.ResponseHeadersRead,
@@ -622,7 +625,7 @@ namespace ApiClient.Runtime
                         _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token);
 
                         char[] buffer = new char[_streamBufferSize];
-                        string partialMessage = "";
+                        var partialMessageBuilder = new StringBuilder();
 
                         do
                         {
@@ -633,7 +636,7 @@ namespace ApiClient.Runtime
 
                             // read the stream
                             int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
-                            var readString = new string(buffer)[..charsRead];
+                            var readString = new string(buffer, 0, charsRead);
 
                             // update read time
                             streamLastReadTime = DateTime.UtcNow;
@@ -646,24 +649,28 @@ namespace ApiClient.Runtime
                              */
                             if (readString.EndsWith("\n\n") == false)
                             {
-                                partialMessage += readString;
+                                partialMessageBuilder.Append(readString);
                                 continue;
                             }
                             else
                             {
-                                readString = partialMessage + readString;
-                                partialMessage = "";
+                                if (partialMessageBuilder.Length > 0)
+                                {
+                                    partialMessageBuilder.Append(readString);
+                                    readString = partialMessageBuilder.ToString();
+                                    partialMessageBuilder.Clear();
+                                }
                             }
 
                             // update content length
                             responseMessage.Content.Headers.ContentLength = readString.Length;
 
                             // extract json string
-                            var regexPattern = @"({.*})";
                             MatchCollection matches = null;
                             try
                             {
-                                matches = Regex.Matches(readString, regexPattern, RegexOptions.Multiline);
+                                Profiler.BeginSample("Api Client Stream Regex Extraction");
+                                matches = JsonExtractorRegex.Matches(readString);
                             }
                             catch (Exception ex)
                             {
@@ -678,6 +685,10 @@ namespace ApiClient.Runtime
                                     request.RequestId,
                                     false),
                                 _syncCtx);
+                            }
+                            finally
+                            {
+                                Profiler.EndSample();
                             }
 
                             // process matches
@@ -697,7 +708,9 @@ namespace ApiClient.Runtime
                                         T content = default;
                                         try
                                         {
+                                            Profiler.BeginSample("Api Client Stream Deserialization");
                                             content = JsonConvert.DeserializeObject<T>(jsonString);
+                                            Profiler.EndSample();
 
                                             if (_verboseLogging)
                                             {
@@ -718,6 +731,7 @@ namespace ApiClient.Runtime
                                         }
                                         catch (Exception ex)
                                         {
+                                            Profiler.EndSample();
                                             // handle parsing error
                                             OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
                                                 new ParsingErrorHttpResponse(
@@ -755,7 +769,7 @@ namespace ApiClient.Runtime
                                 OnStreamResponse?.PostOnMainThread(
                                     await _middleware.ProcessResponse(
                                         new ParsingErrorHttpResponse(
-                                            $"Couldn't get valid JSON string that is matching regex pattern:'{regexPattern}'",
+                                            $"Couldn't get valid JSON string that is matching regex pattern",
                                             responseMessage.Headers,
                                             responseMessage.Content.Headers,
                                             readString,
@@ -799,6 +813,7 @@ namespace ApiClient.Runtime
                 finally
                 {
                     updateReadDeltaValueCts?.Cancel();
+                    Profiler.EndSample();
                 }
 
                 async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
