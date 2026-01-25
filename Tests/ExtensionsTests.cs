@@ -58,7 +58,7 @@ namespace ApiClient.Tests
         public void GetHeader_SingleValue_ReturnsTrue()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
             response.Headers.Add("X-Custom-Header", "test-value");
 
             // Act
@@ -73,7 +73,7 @@ namespace ApiClient.Tests
         public void GetHeader_MultipleValues_ReturnsFalse()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
             response.Headers.Add("X-Custom-Header", new[] { "value1", "value2" });
 
             // Act
@@ -88,7 +88,7 @@ namespace ApiClient.Tests
         public void GetHeader_NonExistentHeader_ReturnsFalse()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
 
             // Act
             var result = response.Headers.GetHeader("X-Non-Existent", out var headerValue);
@@ -116,7 +116,7 @@ namespace ApiClient.Tests
         public void ToHeadersDictionary_ValidHeaders_ReturnsDictionary()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
             response.Headers.Add("X-Header-1", "value1");
             response.Headers.Add("X-Header-2", "value2");
 
@@ -134,7 +134,7 @@ namespace ApiClient.Tests
         public void ToHeadersDictionary_MultipleValuesInHeader_JoinsWithSemicolon()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
             response.Headers.Add("X-Multi-Header", new[] { "value1", "value2", "value3" });
 
             // Act
@@ -149,7 +149,7 @@ namespace ApiClient.Tests
         public void ToHeadersDictionary_EmptyHeaders_ReturnsEmptyDictionary()
         {
             // Arrange
-            var response = new HttpResponseMessage();
+            using var response = new HttpResponseMessage();
 
             // Act
             var dictionary = response.Headers.ToHeadersDictionary();

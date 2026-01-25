@@ -12,7 +12,7 @@ using ApiClient.Runtime.HttpResponses;
 using NUnit.Framework;
 using Newtonsoft.Json;
 
-namespace Tests
+namespace ApiClient.Tests
 {
     /// <summary>
     /// Unit tests for ApiClient helper methods
@@ -47,7 +47,7 @@ namespace Tests
         public void PrepareJsonStream_WithoutGzip_ReturnsOriginalStream()
         {
             // Arrange
-            var originalStream = new MemoryStream(Encoding.UTF8.GetBytes("test data"));
+            using var originalStream = new MemoryStream(Encoding.UTF8.GetBytes("test data"));
             var headers = GetContentHeaders();
 
             // Act
@@ -61,7 +61,7 @@ namespace Tests
         public void PrepareJsonStream_WithGzip_ReturnsGZipStream()
         {
             // Arrange
-            var originalStream = new MemoryStream();
+            using var originalStream = new MemoryStream();
             var headers = GetContentHeaders(addGzip: true);
 
             // Act
@@ -75,7 +75,7 @@ namespace Tests
         public void PrepareJsonStream_WithMultipleEncodings_ReturnsGZipStreamWhenGzipPresent()
         {
             // Arrange
-            var originalStream = new MemoryStream();
+            using var originalStream = new MemoryStream();
             var headers = GetContentHeaders();
             headers.ContentEncoding.Add("deflate");
             headers.ContentEncoding.Add("gzip");
@@ -97,7 +97,7 @@ namespace Tests
             // Arrange
             var testObject = new TestModel { Id = 123, Name = "Test" };
             var json = JsonConvert.SerializeObject(testObject);
-            var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
             var headers = GetContentHeaders();
 
             // Act
@@ -115,7 +115,7 @@ namespace Tests
         {
             // Arrange
             var invalidJson = "{ invalid json }";
-            var stream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
             var headers = GetContentHeaders();
 
             // Act & Assert
@@ -129,7 +129,7 @@ namespace Tests
         public void DeserializeJson_EmptyStream_ReturnsNull()
         {
             // Arrange
-            var stream = new MemoryStream();
+            using var stream = new MemoryStream();
             var headers = GetContentHeaders();
 
             // Act
@@ -146,7 +146,7 @@ namespace Tests
             // Arrange
             var testObject = new TestModel { Id = 456, Name = "Compressed" };
             var json = JsonConvert.SerializeObject(testObject);
-            var compressedStream = new MemoryStream();
+            using var compressedStream = new MemoryStream();
             
             using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Compress, true))
             {
@@ -176,12 +176,12 @@ namespace Tests
         {
             // Arrange
             var bodyContent = "Test body content";
-            var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
             var headers = GetContentHeaders();
-            _apiClient.SetBodyLogging(true);
+            var loggingClient = CreateApiClient(bodyLoggingEnabled: true);
 
             // Act
-            var result = await _apiClient.TestReadBodyForLoggingAsync(stream, headers);
+            var result = await loggingClient.TestReadBodyForLoggingAsync(stream, headers);
 
             // Assert
             Assert.AreEqual(bodyContent, result);
@@ -192,9 +192,8 @@ namespace Tests
         {
             // Arrange
             var bodyContent = "Test body content";
-            var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(bodyContent));
             var headers = GetContentHeaders();
-            _apiClient.SetBodyLogging(false);
 
             // Act
             var result = await _apiClient.TestReadBodyForLoggingAsync(stream, headers);
@@ -208,7 +207,7 @@ namespace Tests
         {
             // Arrange
             var bodyContent = "Compressed body content";
-            var compressedStream = new MemoryStream();
+            using var compressedStream = new MemoryStream();
             
             using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Compress, true))
             {
@@ -218,10 +217,10 @@ namespace Tests
             
             compressedStream.Position = 0;
             var headers = GetContentHeaders(addGzip: true);
-            _apiClient.SetBodyLogging(true);
+            var loggingClient = CreateApiClient(bodyLoggingEnabled: true);
 
             // Act
-            var result = await _apiClient.TestReadBodyForLoggingAsync(compressedStream, headers);
+            var result = await loggingClient.TestReadBodyForLoggingAsync(compressedStream, headers);
 
             // Assert
             Assert.AreEqual(bodyContent, result);
@@ -270,6 +269,8 @@ namespace Tests
             // Arrange
             var tasks = new Task[10];
             long bytesPerCall = 100;
+            var initialCompressed = _apiClient.ResponseTotalCompressedBytes;
+            var initialUncompressed = _apiClient.ResponseTotalUncompressedBytes;
 
             // Act
             for (int i = 0; i < tasks.Length; i++)
@@ -278,10 +279,11 @@ namespace Tests
             }
             Task.WaitAll(tasks);
 
+            var expectedDelta = tasks.Length * bytesPerCall;
+
             // Assert
-            // Should have accumulated all the bytes from parallel calls
-            Assert.Greater(_apiClient.ResponseTotalUncompressedBytes, 0);
-            Assert.Greater(_apiClient.ResponseTotalCompressedBytes, 0);
+            Assert.AreEqual(initialUncompressed + expectedDelta, _apiClient.ResponseTotalUncompressedBytes);
+            Assert.AreEqual(initialCompressed + expectedDelta, _apiClient.ResponseTotalCompressedBytes);
         }
 
         #endregion
@@ -294,8 +296,8 @@ namespace Tests
             // Arrange
             var testContent = new TestModel { Id = 789, Name = "Content" };
             var json = JsonConvert.SerializeObject(testContent);
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
 
             // Act
             var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
@@ -315,8 +317,8 @@ namespace Tests
             // Arrange
             var testError = new ErrorModel { Code = "ERR001", Message = "Error occurred" };
             var json = JsonConvert.SerializeObject(testError);
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.BadRequest);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(json, HttpStatusCode.BadRequest);
 
             // Act
             var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
@@ -334,8 +336,8 @@ namespace Tests
         public async Task ProcessJsonResponse_WithNonJsonContent_ReturnsEmpty()
         {
             // Arrange
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.OK, "text/plain");
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.OK, "text/plain");
 
             // Act
             var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
@@ -353,8 +355,8 @@ namespace Tests
         {
             // Arrange
             var invalidJson = "{ invalid json structure";
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage(invalidJson, HttpStatusCode.OK);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(invalidJson, HttpStatusCode.OK);
 
             // Act
             var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
@@ -367,6 +369,27 @@ namespace Tests
             Assert.IsInstanceOf<ParsingErrorHttpResponse>(result.errorResponse);
         }
 
+        [Test]
+        public async Task ProcessJsonResponse_With399StatusCode_TreatedAsSuccess()
+        {
+            // Arrange
+            var testContent = new TestModel { Id = 399, Name = "Boundary" };
+            var json = JsonConvert.SerializeObject(testContent);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(json, (HttpStatusCode)399);
+
+            // Act
+            var result = await _apiClient.TestProcessJsonResponse<TestModel, ErrorModel>(
+                responseMessage, requestMessage);
+
+            // Assert
+            Assert.IsNotNull(result.content);
+            Assert.AreEqual(399, result.content.Id);
+            Assert.AreEqual("Boundary", result.content.Name);
+            Assert.IsNull(result.error);
+            Assert.IsNull(result.errorResponse);
+        }
+
         #endregion
 
         #region ProcessJsonErrorResponse Tests
@@ -377,8 +400,8 @@ namespace Tests
             // Arrange
             var testError = new ErrorModel { Code = "ERR002", Message = "Server error" };
             var json = JsonConvert.SerializeObject(testError);
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.InternalServerError);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(json, HttpStatusCode.InternalServerError);
 
             // Act
             var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
@@ -396,8 +419,8 @@ namespace Tests
         {
             // Arrange
             var json = JsonConvert.SerializeObject(new ErrorModel { Code = "OK", Message = "Success" });
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage(json, HttpStatusCode.OK);
 
             // Act
             var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
@@ -412,8 +435,8 @@ namespace Tests
         public async Task ProcessJsonErrorResponse_WithNonJsonContent_ReturnsEmpty()
         {
             // Arrange
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
-            var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.BadRequest, "text/plain");
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "http://test.com");
+            using var responseMessage = CreateResponseMessage("plain text", HttpStatusCode.BadRequest, "text/plain");
 
             // Act
             var result = await _apiClient.TestProcessJsonErrorResponse<ErrorModel>(
@@ -440,12 +463,32 @@ namespace Tests
 
         private HttpContentHeaders GetContentHeaders(string content = "", bool addGzip = false)
         {
-            using var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
+            var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
             if (addGzip)
             {
                 httpContent.Headers.ContentEncoding.Add("gzip");
             }
+
             return httpContent.Headers;
+        }
+
+        private ApiClientTestable CreateApiClient(bool bodyLoggingEnabled)
+        {
+            var options = new ApiClientOptions
+            {
+                Timeout = _options.Timeout,
+                GraphQLClientEndpoint = _options.GraphQLClientEndpoint,
+                RetryPolicies = _options.RetryPolicies,
+                Middleware = _options.Middleware,
+                StreamBufferSize = _options.StreamBufferSize,
+                ByteArrayBufferSize = _options.ByteArrayBufferSize,
+                Version = _options.Version,
+                StreamReadDeltaUpdateTime = _options.StreamReadDeltaUpdateTime,
+                VerboseLogging = _options.VerboseLogging,
+                BodyLogging = bodyLoggingEnabled
+            };
+
+            return new ApiClientTestable(options);
         }
 
         #endregion
@@ -508,13 +551,6 @@ namespace Tests
             HttpRequestMessage requestMessage)
         {
             return ProcessJsonErrorResponse<E>(responseMessage, requestMessage);
-        }
-
-        public void SetBodyLogging(bool enabled)
-        {
-            // Use reflection to set the private field
-            var field = typeof(ApiClient.Runtime.ApiClient).GetField("_bodyLogging", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            field?.SetValue(this, enabled);
         }
     }
 }
