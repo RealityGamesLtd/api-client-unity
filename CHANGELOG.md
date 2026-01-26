@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+
+## [1.3.0]
+### Add
+- Stream deserialization support for automatic parsing of streamed data
+- Possibility to use multiple retry policies
+- Header request support for retrieving server headers separately
+- CountingStream utility for tracking received bytes
+- Comprehensive test suite with ApiClientHelperTests and ExtensionsTests
+### Improvement
+- Better threading solution with separate threads for all requests
+- Removed GraphQL support for a lighter package footprint
+- Refactored ApiClient with improved code structure and maintainability
+- Updated package dependencies
+
 ## [1.2.2]
 ### Add
 - Added gathering stats for compressed and uncompressed received bytes in IApiClient
