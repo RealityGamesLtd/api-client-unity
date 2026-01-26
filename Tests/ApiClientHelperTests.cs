@@ -477,7 +477,6 @@ namespace ApiClient.Tests
             var options = new ApiClientOptions
             {
                 Timeout = _options.Timeout,
-                GraphQLClientEndpoint = _options.GraphQLClientEndpoint,
                 RetryPolicies = _options.RetryPolicies,
                 Middleware = _options.Middleware,
                 StreamBufferSize = _options.StreamBufferSize,

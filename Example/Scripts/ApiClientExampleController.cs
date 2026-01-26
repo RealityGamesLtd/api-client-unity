@@ -4,8 +4,6 @@ using ApiClient.Runtime;
 using UnityEngine;
 using TMPro;
 using ApiClient.Runtime.HttpResponses;
-using ApiClient.Runtime.GraphQLBuilder;
-using System.Text;
 using Newtonsoft.Json;
 using UnityEngine.UI;
 using System;
@@ -63,7 +61,7 @@ namespace ApiClientExample
             //     _cts.Token);
 
             var request = Session.Instance.ApiClientConnecton.CreatePost<System.Object, ServerErrorResponse>(
-                "https://authentication.mwodev.r10s.r5y.io/guest/register",
+                "https://configs.mwostg.r10s.r5y.io/config",
                 JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
                 _cts.Token,
                 Session.authenticationHeaderValue);
@@ -96,59 +94,6 @@ namespace ApiClientExample
                     {
                         Debug.Log(per.Message);
                         response.SetError(ResponseErrorCode.Unknown, per.Message);
-                    }
-                }
-            }
-        }
-
-        public async void MakeGraphQlRequest()
-        {
-            responseView.SetActive(true);
-            responseText.text = "";
-
-            var query = new Query()
-                .Name("__type")
-                .Select("name")
-                .Where("name", "users");
-
-            // var query = new Query()
-            //     .Name("__type")
-            //     .Select("name")
-            //     .Where("name", new AnonRegisterResponse(){accessToken = "a", playerId = "b", refreshToken = "c"});
-
-            Debug.Log(query.ToString());
-
-            var request = Session.Instance.ApiClientConnecton.CreateGraphQLRequest<ResponseType>(query, _cts.Token);
-
-            var httpResponse = await request.Send();
-            var response = new ResponseWithContent<ResponseType, ResponseErrorCode>(httpResponse);
-
-            if (httpResponse.HasNoErrors)
-            {
-                var responseContent = httpResponse as HttpResponse<ResponseType>;
-                Debug.Log(responseContent.Content.__type.Name);
-                responseText.text = responseContent.Content.__type.Name;
-            }
-            else
-            {
-                if (!httpResponse.IsAborted)
-                {
-                    Debug.Log("error");
-
-                    if (httpResponse is NetworkErrorHttpResponse ner)
-                    {
-                        Debug.Log(ner.Message);
-                        response.SetError(ResponseErrorCode.Unknown, "User friendly Network Error message");
-                    }
-                    else if (httpResponse is TimeoutHttpResponse t)
-                    {
-                        Debug.Log("Timeout");
-                        response.SetError(ResponseErrorCode.Unknown, "User friendly Timeout Error message");
-                    }
-                    else if (httpResponse is ParsingErrorHttpResponse per)
-                    {
-                        Debug.Log(per.Message);
-                        response.SetError(ResponseErrorCode.Unknown, "User friendly Content Parsing Error message");
                     }
                 }
             }
@@ -263,22 +208,11 @@ namespace ApiClientExample
             public string message, landlordErrorCode;
         }
 
-        public class AnonRegisterResponse : IQueryObject
+        public class AnonRegisterResponse
         {
             public string playerId;
             public string accessToken;
             public string refreshToken;
-
-            public string SerializeToQuery()
-            {
-                var stringBuilder = new StringBuilder();
-                stringBuilder.Append("{");
-                stringBuilder.Append($"{nameof(playerId)}: {QueryStringBuilder.BuildQueryParam(playerId)},");
-                stringBuilder.Append($"{nameof(accessToken)}: {QueryStringBuilder.BuildQueryParam(accessToken)},");
-                stringBuilder.Append($"{nameof(refreshToken)}: {QueryStringBuilder.BuildQueryParam(refreshToken)}");
-                stringBuilder.Append("}");
-                return stringBuilder.ToString();
-            }
         }
 
         public class UserAuthenticationData

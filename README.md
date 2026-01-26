@@ -245,14 +245,24 @@ AotEnsureTypes.EnsureTypes();
 ### NuGetForUnity
 https://github.com/GlitchEnzo/NuGetForUnity
 
-### GrahpQL Client
-https://github.com/graphql-dotnet/graphql-client
-
 ### Polly
 https://github.com/App-vNext/Polly
 
-### Polly WaitAndRetry
+### Polly.Contrib.WaitAndRetry
 https://github.com/Polly-Contrib/Polly.Contrib.WaitAndRetry
+
+### Polly.Extensions.Http
+https://github.com/App-vNext/Polly.Extensions.Http
 
 ### Newtonsoft.Json-for-Unity
 https://github.com/jilleJr/Newtonsoft.Json-for-Unity
+
+# Versions
+Microsoft.Bcl.AsyncInterfaces.10.0.1
+Microsoft.Bcl.TimeProvider.10.0.1
+Polly.8.6.5
+Polly. Contrib.WaitAndRetry.1.1.1
+Polly.Core.8.6.5
+Polly.Extensions.Http.3.0.0
+System. ComponentModel.Annotations.4.5.0
+ZCS.Utf8Json.1.4.6

@@ -28,6 +28,5 @@ namespace ApiClient.Runtime
         Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req);
         Task<IHttpResponse> SendByteArrayRequest(HttpClientByteArrayRequest req, Action<ByteArrayRequestProgress> progressCallback = null);
         Task SendStreamRequest<T>(HttpClientStreamRequest<T> request, Action<IHttpResponse> OnStreamResponse, Action<TimeSpan> readDelta);
-        Task<IHttpResponse> SendGraphQLRequest<T>(GraphQLClientRequest<T> graphQLRequest);
     }
 }

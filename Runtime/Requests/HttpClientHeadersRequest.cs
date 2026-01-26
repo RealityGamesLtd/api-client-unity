@@ -98,7 +98,7 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientHeadersRequest(
             HttpRequestMessage requestMessage,
-            ApiClient apiClient,
+            IApiClient apiClient,
             CancellationToken ct)
         {
             RequestMessage = requestMessage;
