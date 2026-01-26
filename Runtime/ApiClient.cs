@@ -8,8 +8,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
 using Newtonsoft.Json;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
@@ -22,7 +20,7 @@ using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime
 {
-    public class ApiClient : IApiClient
+    public partial class ApiClient : IApiClient
     {
         private long _responseTotalCompressedBytes;
         private long _responseTotalUncompressedBytes;
@@ -31,7 +29,6 @@ namespace ApiClient.Runtime
 
         public UrlCache Cache { get; } = new();
 
-        private readonly GraphQLHttpClient _graphQLClient;
         private readonly HttpClient _httpClient;
         private readonly IApiClientMiddleware _middleware;
         private readonly int _streamBufferSize = 4096;
@@ -70,17 +67,6 @@ namespace ApiClient.Runtime
 
             // assign body logging
             _bodyLogging = options.BodyLogging;
-
-            if (Uri.IsWellFormedUriString(options.GraphQLClientEndpoint, UriKind.Absolute))
-            {
-                // create options for graphQLClient
-                var graphQLClientOptions = new GraphQLHttpClientOptions()
-                {
-                    EndPoint = new Uri(options.GraphQLClientEndpoint),
-                };
-                // create graphQLClient using httpClient instance
-                _graphQLClient = new GraphQLHttpClient(graphQLClientOptions, new NewtonsoftJsonSerializer(), _httpClient);
-            }
 
             _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
         }
@@ -833,108 +819,6 @@ namespace ApiClient.Runtime
                     }
                 }
             }, request.CancellationToken);
-        }
-
-        /// <summary>
-        /// Make GraphQL request
-        /// </summary>
-        /// <typeparam name="T">Response content type</typeparam>
-        /// <param name="graphQLRequest">Request to make</param>
-        /// <returns><see cref="HttpResponse"/> or 
-        /// <see cref="ParsingErrorHttpResponse"/> or 
-        /// <see cref="AbortedHttpResponse"/> or 
-        /// <see cref="TimeoutHttpResponse"/> or 
-        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
-        public async Task<IHttpResponse> SendGraphQLRequest<T>(GraphQLClientRequest<T> graphQLRequest)
-        {
-            await _middleware.ProcessRequest(graphQLRequest, true);
-
-            IHttpResponse response = null;
-
-            try
-            {
-                await _retryPolicies.ExecuteAsync(async (c, ct) =>
-                {
-                    graphQLRequest.IsSent = true;
-
-                    await _middleware.ProcessRequest(graphQLRequest, false);
-
-                    var graphQLResponse = _graphQLClient.SendQueryAsync<T>(graphQLRequest, graphQLRequest.CancellationToken);
-
-                    try
-                    {
-                        await graphQLResponse;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        if (graphQLRequest.CancellationToken.IsCancellationRequested)
-                        {
-                            // Task was aborted
-                            new AbortedHttpResponse(graphQLRequest.Uri);
-                        }
-                        else
-                        {
-                            // timeout
-                            response = new TimeoutHttpResponse(graphQLRequest.Uri);
-                        }
-                    }
-                    catch (JsonException e)
-                    {
-                        response = new ParsingErrorHttpResponse(e.Message, null, graphQLRequest.Uri);
-                    }
-                    catch (Exception e)
-                    {
-                        response = new NetworkErrorHttpResponse(e.Message, graphQLRequest.Uri);
-                    }
-
-                    if (response == null && graphQLResponse != null && graphQLResponse.Result != null)
-                    {
-                        // try to get graphQLHttpResponse to check status code and response headers
-                        GraphQLHttpResponse<T> graphQLHttpResponse = null;
-                        try
-                        {
-                            graphQLHttpResponse = graphQLResponse.Result.AsGraphQLHttpResponse<T>();
-                        }
-                        catch (Exception e)
-                        {
-                            // handle invalid cast
-                            response = new ParsingErrorHttpResponse(e.Message, graphQLHttpResponse?.ResponseHeaders, graphQLRequest.Uri);
-                        }
-
-                        if (response == null && graphQLResponse.Result.Errors == null)
-                        {
-                            // valid response
-                            response = new HttpResponse<T>(
-                                graphQLResponse.Result.Data,
-                                graphQLHttpResponse.ResponseHeaders,
-                                null,
-                                null,
-                                graphQLRequest.Uri,
-                                graphQLHttpResponse.StatusCode);
-                        }
-                        else
-                        {
-                            // handle errors
-                            var errorMessage = JsonConvert.SerializeObject(graphQLResponse.Result.Errors, Formatting.Indented);
-                            response = new NetworkErrorHttpResponse(errorMessage, graphQLRequest.Uri);
-                        }
-                    }
-                    else if (response == null)
-                    {
-                        // no result
-                        response = new NetworkErrorHttpResponse("No valid result in graphQLResponse", graphQLRequest.Uri);
-                    }
-
-                    return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, false);
-
-                }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, graphQLRequest.CancellationToken, true);
-            }
-            catch (OperationCanceledException)
-            {
-                response = new AbortedHttpResponse(graphQLRequest.Uri);
-            }
-
-            return await _middleware.ProcessResponse(response, graphQLRequest.RequestId, true);
         }
 
         #region Helper Methods

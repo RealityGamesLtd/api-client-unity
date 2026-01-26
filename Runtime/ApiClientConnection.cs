@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using ApiClient.Runtime.Cache;
-using ApiClient.Runtime.GraphQLBuilder;
 using ApiClient.Runtime.Requests;
 
 namespace ApiClient.Runtime
@@ -483,68 +482,6 @@ namespace ApiClient.Runtime
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
             };
-
-            return request;
-        }
-
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
-            IQuery query,
-            CancellationToken ct,
-            AuthenticationHeaderValue authentication = null,
-            Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
-        {
-            var request = new GraphQLClientRequest<T>(_apiClient, ct)
-            {
-                Authentication = authentication,
-                Query = query.ToString(),
-                Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
-            };
-
-            request.RequestMessage.Version = _httpVersion;
-
-            return request;
-        }
-
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
-            string query,
-            CancellationToken ct,
-            AuthenticationHeaderValue authentication = null,
-            Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
-        {
-            var request = new GraphQLClientRequest<T>(_apiClient, ct)
-            {
-                Authentication = authentication,
-                Query = query,
-                Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
-            };
-
-            request.RequestMessage.Version = _httpVersion;
-
-            return request;
-        }
-
-        public GraphQLClientRequest<T> CreateGraphQLRequest<T>(
-            string query,
-            object variables,
-            CancellationToken ct,
-            AuthenticationHeaderValue authentication = null,
-            Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
-        {
-            var request = new GraphQLClientRequest<T>(_apiClient, ct)
-            {
-                Authentication = authentication,
-                Query = query,
-                Variables = variables,
-                Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
-            };
-
-            request.RequestMessage.Version = _httpVersion;
 
             return request;
         }

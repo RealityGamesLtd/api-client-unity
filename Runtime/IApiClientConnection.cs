@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Threading;
 using ApiClient.Runtime.Cache;
-using ApiClient.Runtime.GraphQLBuilder;
 using ApiClient.Runtime.Requests;
 
 namespace ApiClient.Runtime
@@ -13,9 +12,6 @@ namespace ApiClient.Runtime
         void SetDefaultHeader(string key, string value);
         HttpClientStreamRequest<T> CreateGetStreamRequest<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true);
         HttpClientByteArrayRequest CreateGetByteArrayRequest(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null);
-        GraphQLClientRequest<T> CreateGraphQLRequest<T>(IQuery query, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true);
-        GraphQLClientRequest<T> CreateGraphQLRequest<T>(string query, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true);
-        GraphQLClientRequest<T> CreateGraphQLRequest<T>(string query, object variables, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true);
         HttpClientRequest<T, E> CreateGet<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null);
         HttpClientRequest<T> CreateGet<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null);
         HttpClientRequest CreateGet(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null);
