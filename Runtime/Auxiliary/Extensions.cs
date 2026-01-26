@@ -6,7 +6,7 @@ using System.Threading;
 using ApiClient.Runtime.HttpResponses;
 using UnityEngine;
 
-namespace ApiClient.Runtime
+namespace ApiClient.Runtime.Auxiliary
 {
     public static class Extensions
     {

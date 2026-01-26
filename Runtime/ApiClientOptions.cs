@@ -2,6 +2,7 @@ using System;
 using Polly.Retry;
 using ApiClient.Runtime.HttpResponses;
 using System.Net;
+using Polly.Wrap;
 
 namespace ApiClient.Runtime
 {
@@ -13,9 +14,9 @@ namespace ApiClient.Runtime
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
 
         /// <summary>
-        /// Custom retry policy to set the rules of what happens when requests fail.
+        /// Custom retry policies to set the rules of what happens when requests fail.
         /// </summary>
-        public AsyncRetryPolicy<IHttpResponse> RetryPolicy { get; set; }
+        public AsyncPolicyWrap<IHttpResponse> RetryPolicies { get; set; }
 
         /// <summary>
         /// Middleware allows to inject some logic before the response is returned.

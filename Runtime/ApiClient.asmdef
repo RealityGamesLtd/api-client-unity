@@ -9,12 +9,7 @@
     "precompiledReferences": [
         "Newtonsoft.Json.dll",
         "Polly.dll",
-        "Polly.Core.dll",
-        "System.ComponentModel.Annotations.dll",
-        "Microsoft.Bcl.AsyncInterfaces.dll",
-        "Microsoft.Bcl.TimeProvider.dll",
-        "Polly.Contrib.WaitAndRetry.dll",
-        "Polly.Extensions.Http.dll"
+        "Polly.Contrib.WaitAndRetry.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [],

@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using ApiClient.Runtime.Cache;
+using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime.HttpResponses
 {
