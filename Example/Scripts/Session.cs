@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using ApiClient.Runtime;
 using ApiClient.Runtime.HttpResponses;
 using Polly;
@@ -33,6 +34,11 @@ namespace ApiClientExample
                 HttpStatusCode.GatewayTimeout // 504
             };
 
+        public static readonly AuthenticationHeaderValue authenticationHeaderValue = new("Bearer", "your_token_here");
+
+        private const string RETRY_ATTEMPT_CONTEXT_KEY = "RetryAttempt";
+        private const string NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY = "newAuthenticationHeaderValue";
+
         public readonly IApiClientConnection ApiClientConnecton = new ApiClientConnection(
             new ApiClientOptions()
             {
@@ -58,8 +64,24 @@ namespace ApiClientExample
                         (response, delay, retryAttempt, context) =>
                         {
                             // Logic to be executed before each retry
-                            context["RetryAttempt"] = retryAttempt;
-                        })
+                            context[RETRY_ATTEMPT_CONTEXT_KEY] = retryAttempt;
+                        }),
+                        Policy
+                    .HandleResult<IHttpResponse>(r =>
+                    {
+                        if (r is IHttpResponseStatusCode responseWithStatusCode)
+                        {
+                            return responseWithStatusCode.StatusCode == (HttpStatusCode)401;
+                        }
+                        return false;
+                    })
+                    .WaitAndRetryAsync(Backoff.DecorrelatedJitterBackoffV2(
+                        medianFirstRetryDelay: TimeSpan.FromSeconds(1),
+                        retryCount: 2),
+                        (response, delay, retryAttempt, context) =>
+                    {
+                        context[NEW_AUTHENTICATION_HEADER_VALUE_CONTEXT_KEY] = authenticationHeaderValue;
+                    })
                 )
             });
     }

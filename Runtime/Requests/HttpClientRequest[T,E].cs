@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime.Requests
 {
@@ -69,7 +70,7 @@ namespace ApiClient.Runtime.Requests
             }
         }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
         private readonly Func<HttpClientRequest<T, E>> _recreateFunc;
         private readonly UrlCache _urlCache;
         private readonly CachePolicy _cachePolicy;
@@ -79,7 +80,7 @@ namespace ApiClient.Runtime.Requests
 
         public HttpClientRequest(
             HttpRequestMessage httpRequestMessage,
-            ApiClient apiClient,
+            IApiClient apiClient,
             CancellationToken ct,
             UrlCache urlCache,
             CachePolicy cachePolicy,

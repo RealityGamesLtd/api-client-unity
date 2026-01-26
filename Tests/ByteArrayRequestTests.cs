@@ -49,8 +49,13 @@ namespace ApiClient.Tests
                         {
                             // Logic to be executed before each retry
                             context["RetryAttempt"] = retryAttempt;
-                        })
-                ),
+                        }),
+                Policy
+                    .Handle<HttpRequestException>()
+                    .OrResult<IHttpResponse>(r =>
+                    {
+                        return false;
+                    }).RetryAsync(0)),
                 VerboseLogging = false,
             });
 

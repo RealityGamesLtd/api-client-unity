@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using ApiClient.Runtime.Auxiliary;
 using ApiClient.Runtime.HttpResponses;
 
 namespace ApiClient.Runtime.Requests
@@ -68,12 +69,12 @@ namespace ApiClient.Runtime.Requests
             }
         }
 
-        private readonly ApiClient _apiClient;
+        private readonly IApiClient _apiClient;
 
         private AuthenticationHeaderValue _authentication;
 
 
-        public HttpClientStreamRequest(HttpRequestMessage requestMessage, ApiClient apiClient, CancellationToken ct)
+        public HttpClientStreamRequest(HttpRequestMessage requestMessage, IApiClient apiClient, CancellationToken ct)
         {
             RequestMessage = requestMessage;
             CancellationToken = ct;
