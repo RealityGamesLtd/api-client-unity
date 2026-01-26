@@ -61,7 +61,7 @@ namespace ApiClientExample
             //     _cts.Token);
 
             var request = Session.Instance.ApiClientConnecton.CreatePost<System.Object, ServerErrorResponse>(
-                "https://authentication.mwodev.r10s.r5y.io/guest/register",
+                "https://configs.mwostg.r10s.r5y.io/config",
                 JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
                 _cts.Token,
                 Session.authenticationHeaderValue);
