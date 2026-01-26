@@ -169,10 +169,10 @@ else
 }
 ```
 
-## Retry policy
+## Retry policies
 By default each request will be sent only once.
-To specify the exact rules of how the retry policy should
-look like pass custom policy when creating `IApiClientConnection` instance.
+To specify the exact rules of how the retry policies should
+look like pass custom policy wrapper when creating `IApiClientConnection` instance.
 ```csharp
 private static HttpStatusCode[] httpStatusCodesWorthRetrying = {
             HttpStatusCode.RequestTimeout, // 408
@@ -186,7 +186,7 @@ private readonly IApiClientConnection apiClientConnection = new ApiClientConnect
     {
         GraphQLClientEndpoint = "url",
         Timeout = TimeSpan.FromSeconds(10),
-        RetryPolicy = Policy
+        RetryPolicies = Policy.WrapAsync(Policy
             .Handle<HttpRequestException>()
             .OrResult<IHttpResponse>(r =>
             {
@@ -206,7 +206,7 @@ private readonly IApiClientConnection apiClientConnection = new ApiClientConnect
                 (response, timeSpan) =>
                 {
                     // Logic to be executed before each retry
-                }),
+                })),
     });
 ```
 
@@ -217,6 +217,11 @@ IApiClientConnection instance.
 var authentication = new AuthenticationHeaderValue("Bearer", "Token");
 var request = _apiClientConnection.CreateGet<T>("url", cts.Token, authentication: authentication);
 ```
+Additionally it's possible to change authentication header inside retry policy by setting context's ```newAuthenticationHeaderValue``` field. It can be used for refreshing auth token before request retry.
+```csharp
+context["newAuthenticationHeaderValue"] = new AuthenticationHeaderValue("Bearer", "Token");
+```
+
 
 ## GZip Compression
 GZip compression is supported by default. To enable it, set the `Accept-Encoding: gzip` header as a default header in the `ApiClientConnection` instance.
@@ -240,24 +245,14 @@ AotEnsureTypes.EnsureTypes();
 ### NuGetForUnity
 https://github.com/GlitchEnzo/NuGetForUnity
 
+### GrahpQL Client
+https://github.com/graphql-dotnet/graphql-client
+
 ### Polly
 https://github.com/App-vNext/Polly
 
-### Polly.Contrib.WaitAndRetry
+### Polly WaitAndRetry
 https://github.com/Polly-Contrib/Polly.Contrib.WaitAndRetry
-
-### Polly.Extensions.Http
-https://github.com/App-vNext/Polly.Extensions.Http
 
 ### Newtonsoft.Json-for-Unity
 https://github.com/jilleJr/Newtonsoft.Json-for-Unity
-
-# Versions
-Microsoft.Bcl.AsyncInterfaces.10.0.1
-Microsoft.Bcl.TimeProvider.10.0.1
-Polly.8.6.5
-Polly. Contrib.WaitAndRetry.1.1.1
-Polly.Core.8.6.5
-Polly.Extensions.Http.3.0.0
-System. ComponentModel.Annotations.4.5.0
-ZCS.Utf8Json.1.4.6
