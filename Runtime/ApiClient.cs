@@ -885,7 +885,13 @@ namespace ApiClient.Runtime
             if (cancellationToken.CanBeCanceled)
                 cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
 
-            _syncCtx.Post(_ => { tcs.SetResult(result); }, null);
+            _syncCtx.Post(_ => 
+            { 
+                if(result != null && cancellationToken.IsCancellationRequested == false)
+                {
+                    tcs.SetResult(result); 
+                }
+            }, null);
             return await tcs.Task;
         }
 
