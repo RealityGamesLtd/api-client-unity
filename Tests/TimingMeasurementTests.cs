@@ -225,6 +225,46 @@ namespace ApiClient.Tests
             Assert.IsNotNull(response.TimingInfo);
         }
 
+        [Test]
+        public void HttpResponseByteArray_CacheContentSize_ReturnsActualByteArrayLength()
+        {
+            // Arrange
+            var testBytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+            var response = new HttpResponse<byte[]>(
+                testBytes,
+                new HttpResponseMessage().Headers,
+                new StringContent("").Headers,
+                null,  // Body is null for byte arrays
+                new Uri("http://test.com"),
+                HttpStatusCode.OK);
+
+            // Act
+            var cacheSize = (response as ApiClient.Runtime.Cache.ICachedHttpResponse).CacheContentSize();
+
+            // Assert
+            Assert.AreEqual(testBytes.Length, cacheSize, "Cache size should equal byte array length");
+        }
+
+        [Test]
+        public void HttpResponseString_CacheContentSize_ReturnsBodyBasedSize()
+        {
+            // Arrange
+            var testString = "Hello, World!";
+            var response = new HttpResponse<string>(
+                testString,
+                new HttpResponseMessage().Headers,
+                new StringContent("").Headers,
+                testString,
+                new Uri("http://test.com"),
+                HttpStatusCode.OK);
+
+            // Act
+            var cacheSize = (response as ApiClient.Runtime.Cache.ICachedHttpResponse).CacheContentSize();
+
+            // Assert
+            Assert.AreEqual(testString.Length * sizeof(char) * 2, cacheSize, "Cache size should be based on body length");
+        }
+
         #region Helper Methods
 
         private HttpResponseMessage CreateResponseMessage(string content, HttpStatusCode statusCode, string contentType = "application/json")
