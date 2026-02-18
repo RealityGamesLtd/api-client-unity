@@ -231,6 +231,41 @@ var apiClientConnection = new ApiClientConnection(...);
 apiClientConnection.SetDefaultHeader("Accept-Encoding", "gzip");
 ```
 
+## Time Measurements
+Time measurements can be enabled to track how long it takes to receive responses and deserialize them. This is useful for identifying slow endpoints or large JSON payloads.
+
+Enable time measurements when creating the `ApiClientConnection`:
+```csharp
+var apiClientConnection = new ApiClientConnection(
+    new ApiClientOptions()
+    {
+        GraphQLClientEndpoint = "url",
+        Timeout = TimeSpan.FromSeconds(10),
+        EnableTimeMeasurements = true  // Enable timing measurements
+    });
+```
+
+When enabled, all response objects will include timing information:
+```csharp
+var request = apiClientConnection.CreateGet<T>("url", cts.Token);
+var httpResponse = await request.Send();
+
+if (httpResponse is IHttpResponseTiming timingResponse)
+{
+    var timingInfo = timingResponse.TimingInfo;
+    Debug.Log($"Response Time: {timingInfo.ResponseTime.TotalMilliseconds}ms");
+    Debug.Log($"Deserialization Time: {timingInfo.DeserializationTime.TotalMilliseconds}ms");
+    Debug.Log($"Total Time: {timingInfo.TotalTime.TotalMilliseconds}ms");
+}
+```
+
+The timing information includes:
+- **ResponseTime**: Time elapsed to receive the HTTP response from the server (network time)
+- **DeserializationTime**: Time elapsed to deserialize the JSON response body
+- **TotalTime**: Sum of ResponseTime and DeserializationTime
+
+**Note**: When `EnableTimeMeasurements` is `false` (default), timing properties will be `TimeSpan.Zero` to avoid any performance overhead.
+
 ## Troubleshoot 
 When using IL2CPP and ManagedStrippingLevel unused types won't be compiled.
 To fix that there is an utility class to enforce ahead of time (AOT) compilation of types.
