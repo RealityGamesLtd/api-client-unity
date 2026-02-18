@@ -80,7 +80,8 @@ namespace ApiClient.Runtime.HttpResponses
             // For byte arrays, use the actual content length
             if (typeof(T) == typeof(byte[]) && Content != null)
             {
-                return (Content as byte[]).Length;
+                // Cast to object first, then to byte[] - direct cast from generic T doesn't work
+                return ((byte[])(object)Content).Length;
             }
             
             // assume the content will have the same size as body.
