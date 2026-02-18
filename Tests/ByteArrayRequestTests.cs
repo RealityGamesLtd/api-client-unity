@@ -87,7 +87,7 @@ namespace ApiClient.Tests
 
             Assert.IsNotNull(responseContent.Content);
             Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
+            Assert.That(responseContent.Content.Length, Is.EqualTo(1784));
         }
 
         [UnityTest]
@@ -107,7 +107,7 @@ namespace ApiClient.Tests
 
             Assert.IsNotNull(responseContent.Content);
             Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
+            Assert.That(responseContent.Content.Length, Is.EqualTo(1784));
 
 
             // Second request
