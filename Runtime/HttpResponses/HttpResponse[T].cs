@@ -78,9 +78,9 @@ namespace ApiClient.Runtime.HttpResponses
         public long CacheContentSize()
         {
             // For byte arrays, use the actual content length
-            if (Content is byte[] byteArray)
+            if (typeof(T) == typeof(byte[]) && Content != null)
             {
-                return byteArray.Length;
+                return (Content as byte[]).Length;
             }
             
             // assume the content will have the same size as body.
