@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file.
 
 
+## [Unreleased]
+### Add
+- Time measurement functionality for tracking request and deserialization times
+  - `EnableTimeMeasurements` option in `ApiClientOptions` to enable/disable timing measurements
+  - `TimingInfo` class to hold timing information (ResponseTime, DeserializationTime, TotalTime)
+  - `IHttpResponseTiming` interface implemented by all response types
+  - All response objects include timing information when measurements are enabled
+- Comprehensive tests for timing measurement functionality
+
 ## [1.3.0]
 ### Add
 - Stream deserialization support for automatic parsing of streamed data
