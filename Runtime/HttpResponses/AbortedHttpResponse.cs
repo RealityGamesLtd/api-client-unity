@@ -4,7 +4,7 @@ using System.Net.Http;
 
 namespace ApiClient.Runtime.HttpResponses
 {
-    public class AbortedHttpResponse : IHttpResponse
+    public class AbortedHttpResponse : IHttpResponse, IHttpResponseTiming
     {
         public bool IsClientError => false;
         public bool IsServerError => false;
@@ -16,16 +16,19 @@ namespace ApiClient.Runtime.HttpResponses
         public Uri RequestUri { get; private set; }
         public Dictionary<string, string> Headers { get; private set; } = null;
         public Dictionary<string, string> ContentHeaders { get; private set; } = null;
+        public TimingInfo TimingInfo { get; set; }
 
         public AbortedHttpResponse(HttpRequestMessage request)
         {
             RequestMethod = request.Method;
             RequestUri = request.RequestUri;
+            TimingInfo = new TimingInfo();
         }
         
         public AbortedHttpResponse(Uri requestUri)
         {
             RequestUri = requestUri;
+            TimingInfo = new TimingInfo();
         }
         
     }

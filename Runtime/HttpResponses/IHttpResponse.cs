@@ -63,4 +63,13 @@ namespace ApiClient.Runtime.HttpResponses
         /// </summary>
         string Body { get; }
     }
+
+    public interface IHttpResponseTiming
+    {
+        /// <summary>
+        /// Timing information for the HTTP request (response and deserialization times).
+        /// Only populated when EnableTimeMeasurements is set to true in ApiClientOptions.
+        /// </summary>
+        TimingInfo TimingInfo { get; }
+    }
 }

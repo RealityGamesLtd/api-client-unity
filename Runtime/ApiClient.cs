@@ -36,6 +36,7 @@ namespace ApiClient.Runtime
         private readonly int _byteArrayBufferSize = 4096;
         private readonly bool _verboseLogging;
         private readonly bool _bodyLogging;
+        private readonly bool _enableTimeMeasurements;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
@@ -67,6 +68,9 @@ namespace ApiClient.Runtime
 
             // assign body logging
             _bodyLogging = options.BodyLogging;
+
+            // assign time measurements
+            _enableTimeMeasurements = options.EnableTimeMeasurements;
 
             _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
         }
@@ -104,14 +108,27 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
+                        var requestStartTime = _enableTimeMeasurements ? Diagnostics.Stopwatch.StartNew() : null;
+
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+                            
+                            if (_enableTimeMeasurements)
+                            {
+                                requestStartTime.Stop();
+                            }
+
                             response = new HttpResponse(
                                 request.RequestMessage,
                                 responseMessage.Headers,
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
+
+                            if (_enableTimeMeasurements && response is IHttpResponseTiming timingResponse)
+                            {
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
                         catch (TaskCanceledException)
                         {
@@ -119,11 +136,23 @@ namespace ApiClient.Runtime
                                 response = new AbortedHttpResponse(request.RequestMessage);
                             else
                                 response = new TimeoutHttpResponse(request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
                         catch (Exception ex)
                         {
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
@@ -179,11 +208,18 @@ namespace ApiClient.Runtime
 
                         Profiler.BeginSample($"Api Client Execute Request [E]: {request.Uri}");
 
+                        var requestStartTime = _enableTimeMeasurements ? Diagnostics.Stopwatch.StartNew() : null;
+
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
 
-                            var (error, body, errorResponse) = await ProcessJsonErrorResponse<E>(responseMessage, request.RequestMessage);
+                            if (_enableTimeMeasurements)
+                            {
+                                requestStartTime.Stop();
+                            }
+
+                            var (error, body, deserializationTime, errorResponse) = await ProcessJsonErrorResponse<E>(responseMessage, request.RequestMessage);
 
                             response = errorResponse ?? new HttpResponse<E>(
                                 error,
@@ -192,6 +228,12 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
+
+                            if (_enableTimeMeasurements && response is IHttpResponseTiming timingResponse)
+                            {
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                                timingResponse.TimingInfo.DeserializationTime = deserializationTime;
+                            }
                         }
                         catch (TaskCanceledException)
                         {
@@ -199,11 +241,23 @@ namespace ApiClient.Runtime
                                 response = new AbortedHttpResponse(request.RequestMessage);
                             else
                                 response = new TimeoutHttpResponse(request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
                         catch (Exception ex)
                         {
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
 
                         Profiler.EndSample();
@@ -261,11 +315,19 @@ namespace ApiClient.Runtime
                         await _middleware.ProcessRequest(request, false);
 
                         Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
+
+                        var requestStartTime = _enableTimeMeasurements ? Diagnostics.Stopwatch.StartNew() : null;
+
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
 
-                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
+                            if (_enableTimeMeasurements)
+                            {
+                                requestStartTime.Stop();
+                            }
+
+                            var (content, error, body, deserializationTime, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
 
                             response = errorResponse ?? new HttpResponse<T, E>(
                                 content,
@@ -275,6 +337,12 @@ namespace ApiClient.Runtime
                                 body,
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
+
+                            if (_enableTimeMeasurements && response is IHttpResponseTiming timingResponse)
+                            {
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                                timingResponse.TimingInfo.DeserializationTime = deserializationTime;
+                            }
                         }
                         catch (TaskCanceledException)
                         {
@@ -282,11 +350,23 @@ namespace ApiClient.Runtime
                                 response = new AbortedHttpResponse(request.RequestMessage);
                             else
                                 response = new TimeoutHttpResponse(request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
                         catch (Exception ex)
                         {
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
+
+                            if (_enableTimeMeasurements && requestStartTime != null && response is IHttpResponseTiming timingResponse)
+                            {
+                                requestStartTime.Stop();
+                                timingResponse.TimingInfo.ResponseTime = requestStartTime.Elapsed;
+                            }
                         }
 
                         Profiler.EndSample();
@@ -832,10 +912,12 @@ namespace ApiClient.Runtime
             return source;
         }
 
-        protected T DeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)
+        protected T DeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead, out TimeSpan deserializationTime)
         {
             memoryStream.Position = 0;
             var jsonStream = PrepareJsonStream(memoryStream, headers);
+
+            var stopwatch = _enableTimeMeasurements ? Diagnostics.Stopwatch.StartNew() : null;
 
             Profiler.BeginSample(profilerLabel);
             try
@@ -851,6 +933,15 @@ namespace ApiClient.Runtime
             finally
             {
                 Profiler.EndSample();
+                if (stopwatch != null)
+                {
+                    stopwatch.Stop();
+                    deserializationTime = stopwatch.Elapsed;
+                }
+                else
+                {
+                    deserializationTime = TimeSpan.Zero;
+                }
             }
         }
 
@@ -895,7 +986,7 @@ namespace ApiClient.Runtime
             return await tcs.Task;
         }
 
-        protected async Task<(T content, E error, string body, IHttpResponse errorResponse)> ProcessJsonResponse<T, E>(
+        protected async Task<(T content, E error, string body, TimeSpan deserializationTime, IHttpResponse errorResponse)> ProcessJsonResponse<T, E>(
             HttpResponseMessage responseMessage,
             HttpRequestMessage requestMessage)
         {
@@ -903,12 +994,13 @@ namespace ApiClient.Runtime
             E error = default;
             string body = string.Empty;
             IHttpResponse errorResponse = null;
+            TimeSpan deserializationTime = TimeSpan.Zero;
 
             await using var stream = await responseMessage.Content.ReadAsStreamAsync();
 
             if (responseMessage?.Content?.Headers?.ContentType?.MediaType != "application/json")
             {
-                return (content, error, body, errorResponse);
+                return (content, error, body, deserializationTime, errorResponse);
             }
 
             using var memoryStream = new MemoryStream();
@@ -922,7 +1014,7 @@ namespace ApiClient.Runtime
                 {
                     try
                     {
-                        error = DeserializeJson<E>(memoryStream, responseMessage.Content.Headers, "Api Client Error Deserialization", out var errorBytesRead);
+                        error = DeserializeJson<E>(memoryStream, responseMessage.Content.Headers, "Api Client Error Deserialization", out var errorBytesRead, out deserializationTime);
                         UpdateResponseMetrics(errorBytesRead, responseMessage.Content.Headers.ContentLength);
                     }
                     catch (Exception)
@@ -933,7 +1025,7 @@ namespace ApiClient.Runtime
                 else
                 {
                     // Try to deserialize content for success status codes
-                    content = DeserializeJson<T>(memoryStream, responseMessage.Content.Headers, "Api Client Content Deserialization", out var contentBytesRead);
+                    content = DeserializeJson<T>(memoryStream, responseMessage.Content.Headers, "Api Client Content Deserialization", out var contentBytesRead, out deserializationTime);
                     UpdateResponseMetrics(contentBytesRead, responseMessage.Content.Headers.ContentLength);
                 }
 
@@ -950,22 +1042,23 @@ namespace ApiClient.Runtime
                     responseMessage.StatusCode);
             }
 
-            return (content, error, body, errorResponse);
+            return (content, error, body, deserializationTime, errorResponse);
         }
 
-        protected async Task<(E error, string body, IHttpResponse errorResponse)> ProcessJsonErrorResponse<E>(
+        protected async Task<(E error, string body, TimeSpan deserializationTime, IHttpResponse errorResponse)> ProcessJsonErrorResponse<E>(
             HttpResponseMessage responseMessage,
             HttpRequestMessage requestMessage)
         {
             E error = default;
             string body = string.Empty;
             IHttpResponse errorResponse = null;
+            TimeSpan deserializationTime = TimeSpan.Zero;
 
             await using var stream = await responseMessage.Content.ReadAsStreamAsync();
 
             if (responseMessage?.Content?.Headers?.ContentType?.MediaType != "application/json")
             {
-                return (error, body, errorResponse);
+                return (error, body, deserializationTime, errorResponse);
             }
 
             using var memoryStream = new MemoryStream();
@@ -978,7 +1071,7 @@ namespace ApiClient.Runtime
                 {
                     try
                     {
-                        error = DeserializeJson<E>(memoryStream, responseMessage.Content.Headers, "Api Client Error Deserialization [E]", out var errorBytesRead);
+                        error = DeserializeJson<E>(memoryStream, responseMessage.Content.Headers, "Api Client Error Deserialization [E]", out var errorBytesRead, out deserializationTime);
                         UpdateResponseMetrics(errorBytesRead, responseMessage.Content.Headers.ContentLength);
                     }
                     catch (Exception)
@@ -1000,7 +1093,7 @@ namespace ApiClient.Runtime
                     responseMessage.StatusCode);
             }
 
-            return (error, body, errorResponse);
+            return (error, body, deserializationTime, errorResponse);
         }
 
         #endregion
