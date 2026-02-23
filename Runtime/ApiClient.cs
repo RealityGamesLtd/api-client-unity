@@ -137,7 +137,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -219,7 +219,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -239,7 +239,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                await _middleware.ProcessRequest(req, true);
+                await _middleware.ProcessRequest(req, true).HandleTaskContinuation();
 
                 IHttpResponse response = null;
 
@@ -258,14 +258,14 @@ namespace ApiClient.Runtime
                             context[NewAuthenticationHeaderValueKey] = null;
                         }
 
-                        await _middleware.ProcessRequest(request, false);
+                        await _middleware.ProcessRequest(request, false).HandleTaskContinuation();
 
                         Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
 
-                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
+                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage).HandleTaskContinuation();
 
                             response = errorResponse ?? new HttpResponse<T, E>(
                                 content,
@@ -291,18 +291,18 @@ namespace ApiClient.Runtime
 
                         Profiler.EndSample();
 
-                        return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
+                        return await _middleware.ProcessResponse(response, request.RequestId, false).HandleTaskContinuation();
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true).HandleTaskContinuation();
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
 
-                return await _middleware.ProcessResponse(response, req.RequestId, true);
-            }, req.CancellationToken);
+                return await _middleware.ProcessResponse(response, req.RequestId, true).HandleTaskContinuation();
+            }, req.CancellationToken).HandleTaskContinuation();
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result).HandleTaskContinuation();
         }
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req)
@@ -393,7 +393,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         public async Task<IHttpResponse> SendByteArrayRequest(
@@ -539,7 +539,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -845,7 +845,7 @@ namespace ApiClient.Runtime
                 using var jsonReader = new JsonTextReader(reader);
                 var result = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
                 bytesRead = countingStream.BytesRead;
-                
+
                 return result;
             }
             finally
@@ -879,17 +879,15 @@ namespace ApiClient.Runtime
             Interlocked.Add(ref _responseTotalCompressedBytes, headerContentLength ?? bytesRead);
         }
 
-        protected async Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result, CancellationToken cancellationToken)
+        protected async Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result)
         {
             var tcs = new TaskCompletionSource<IHttpResponse>();
-            if (cancellationToken.CanBeCanceled)
-                cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
 
-            _syncCtx.Post(_ => 
-            { 
-                if(result != null && cancellationToken.IsCancellationRequested == false)
+            _syncCtx.Post(_ =>
+            {
+                if (result != null)
                 {
-                    tcs.SetResult(result); 
+                    tcs.SetResult(result);
                 }
             }, null);
             return await tcs.Task;
@@ -1004,5 +1002,46 @@ namespace ApiClient.Runtime
         }
 
         #endregion
+    }
+
+    public static class ApiClientTasksExtensions
+    {
+        /// <summary>
+        /// Extension method that provides continuation with exception handling
+        /// </summary>
+        /// <param name="task"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Task HandleTaskContinuation(this Task task)
+        {
+            task.ContinueWith(value =>
+            {
+                if (value.IsFaulted)
+                {
+                    Debug.LogException(value.Exception);
+                }
+            });
+
+            return task;
+        }
+
+        /// <summary>
+        /// Extension method that provides continuation with exception handling
+        /// </summary>
+        /// <param name="task"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Task<T> HandleTaskContinuation<T>(this Task<T> task)
+        {
+            task.ContinueWith(value =>
+            {
+                if (value.IsFaulted)
+                {
+                    Debug.LogException(value.Exception);
+                }
+            });
+
+            return task;
+        }
     }
 }
