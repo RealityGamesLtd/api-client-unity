@@ -879,22 +879,20 @@ namespace ApiClient.Runtime
             Interlocked.Add(ref _responseTotalCompressedBytes, headerContentLength ?? bytesRead);
         }
 
-        protected async Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result)
+        protected Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result)
         {
-            var tcs = new TaskCompletionSource<IHttpResponse>();
+            if (result == null)
+                throw new InvalidOperationException(
+                    $"{nameof(ReturnOnSyncContext)}: middleware returned a null {nameof(IHttpResponse)}. " +
+                    "Ensure all IApiClientMiddleware.ProcessResponse implementations return a non-null value.");
 
-            _syncCtx.Post(_ =>
-            {
-                if (result != null)
-                {
-                    tcs.SetResult(result);
-                }
-                else
-                {
-                    tcs.SetException(new Exception("Result is null"));
-                }
-            }, null);
-            return await tcs.Task;
+            // No sync context (e.g. unit tests, thread-pool construction) — return directly.
+            if (_syncCtx == null)
+                return Task.FromResult(result);
+
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            _syncCtx.Post(_ => tcs.SetResult(result), null);
+            return tcs.Task;
         }
 
         protected async Task<(T content, E error, string body, IHttpResponse errorResponse)> ProcessJsonResponse<T, E>(
