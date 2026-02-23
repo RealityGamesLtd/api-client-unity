@@ -889,6 +889,10 @@ namespace ApiClient.Runtime
                 {
                     tcs.SetResult(result);
                 }
+                else
+                {
+                    tcs.SetException(new Exception("Result is null"));
+                }
             }, null);
             return await tcs.Task;
         }
@@ -1010,17 +1014,14 @@ namespace ApiClient.Runtime
         /// Extension method that provides continuation with exception handling
         /// </summary>
         /// <param name="task"></param>
-        /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         public static Task HandleTaskContinuation(this Task task)
         {
-            task.ContinueWith(value =>
-            {
-                if (value.IsFaulted)
-                {
-                    Debug.LogException(value.Exception);
-                }
-            });
+            task.ContinueWith(
+                faultedTask => Debug.LogException(faultedTask.Exception),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
 
             return task;
         }
@@ -1033,13 +1034,11 @@ namespace ApiClient.Runtime
         /// <returns></returns>
         public static Task<T> HandleTaskContinuation<T>(this Task<T> task)
         {
-            task.ContinueWith(value =>
-            {
-                if (value.IsFaulted)
-                {
-                    Debug.LogException(value.Exception);
-                }
-            });
+            task.ContinueWith(
+                faultedTask => Debug.LogException(faultedTask.Exception),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
 
             return task;
         }
