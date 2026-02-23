@@ -239,7 +239,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                await _middleware.ProcessRequest(req, true).HandleTaskContinuation();
+                await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
 
@@ -258,14 +258,14 @@ namespace ApiClient.Runtime
                             context[NewAuthenticationHeaderValueKey] = null;
                         }
 
-                        await _middleware.ProcessRequest(request, false).HandleTaskContinuation();
+                        await _middleware.ProcessRequest(request, false);
 
                         Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
 
-                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage).HandleTaskContinuation();
+                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
 
                             response = errorResponse ?? new HttpResponse<T, E>(
                                 content,
@@ -291,18 +291,18 @@ namespace ApiClient.Runtime
 
                         Profiler.EndSample();
 
-                        return await _middleware.ProcessResponse(response, request.RequestId, false).HandleTaskContinuation();
-                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true).HandleTaskContinuation();
+                        return await _middleware.ProcessResponse(response, request.RequestId, false);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
 
-                return await _middleware.ProcessResponse(response, req.RequestId, true).HandleTaskContinuation();
-            }, req.CancellationToken).HandleTaskContinuation();
+                return await _middleware.ProcessResponse(response, req.RequestId, true);
+            }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result).HandleTaskContinuation();
+            return await ReturnOnSyncContext(result);
         }
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req)
@@ -609,7 +609,7 @@ namespace ApiClient.Runtime
                     using (StreamReader streamReader = new(contentStream, encoding: Encoding.UTF8, true))
                     {
                         // start task that will update read delta regularly
-                        _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token);
+                        _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token).HandleTaskContinuation();
 
                         char[] buffer = new char[_streamBufferSize];
                         var partialMessageBuilder = new StringBuilder();
