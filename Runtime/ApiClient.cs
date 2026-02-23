@@ -129,7 +129,7 @@ namespace ApiClient.Runtime
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
@@ -211,7 +211,7 @@ namespace ApiClient.Runtime
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
@@ -385,7 +385,7 @@ namespace ApiClient.Runtime
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
@@ -531,7 +531,7 @@ namespace ApiClient.Runtime
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     response = new AbortedHttpResponse(req.RequestMessage);
                 }
@@ -770,7 +770,7 @@ namespace ApiClient.Runtime
                         while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
                     }
                 }
-                catch (OperationCanceledException)
+                catch (TaskCanceledException)
                 {
                     if (request.CancellationToken.IsCancellationRequested)
                     {
@@ -815,7 +815,7 @@ namespace ApiClient.Runtime
                         {
                             await Task.Delay(_streamReadDeltaUpdateTime, ct);
                         }
-                        catch (OperationCanceledException) { }
+                        catch (TaskCanceledException) { }
                     }
                 }
             }, request.CancellationToken);
