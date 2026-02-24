@@ -113,7 +113,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -193,7 +193,7 @@ namespace ApiClient.Runtime
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -276,7 +276,7 @@ namespace ApiClient.Runtime
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -369,7 +369,7 @@ namespace ApiClient.Runtime
                                 req.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -515,7 +515,7 @@ namespace ApiClient.Runtime
                                 req.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
