@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.3.1]
+- Changed all catch (OperationCanceledException) blocks to catch (TaskCanceledException) throughout the file
+- Removed CancellationToken parameter and cancellation registration logic from ReturnOnSyncContext method
+- Added HandleTaskContinuation extension methods (generic and non-generic) to log task exceptions
+- Applied HandleTaskContinuation calls to various async operations in SendHttpRequest<T, E> method only
 
 ## [1.3.0]
 ### Add
