@@ -113,7 +113,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Content.Headers,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -137,7 +137,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -193,7 +193,7 @@ namespace ApiClient.Runtime
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -219,7 +219,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -276,7 +276,7 @@ namespace ApiClient.Runtime
                                 request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -302,7 +302,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req)
@@ -369,7 +369,7 @@ namespace ApiClient.Runtime
                                 req.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -393,7 +393,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         public async Task<IHttpResponse> SendByteArrayRequest(
@@ -515,7 +515,7 @@ namespace ApiClient.Runtime
                                 req.RequestMessage,
                                 responseMessage.StatusCode);
                         }
-                        catch (TaskCanceledException)
+                        catch (OperationCanceledException)
                         {
                             if (request.CancellationToken.IsCancellationRequested)
                                 response = new AbortedHttpResponse(request.RequestMessage);
@@ -539,7 +539,7 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result, req.CancellationToken);
+            return await ReturnOnSyncContext(result);
         }
 
         /// <summary>
@@ -609,7 +609,7 @@ namespace ApiClient.Runtime
                     using (StreamReader streamReader = new(contentStream, encoding: Encoding.UTF8, true))
                     {
                         // start task that will update read delta regularly
-                        _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token);
+                        _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token).HandleTaskContinuation();
 
                         char[] buffer = new char[_streamBufferSize];
                         var partialMessageBuilder = new StringBuilder();
@@ -845,7 +845,7 @@ namespace ApiClient.Runtime
                 using var jsonReader = new JsonTextReader(reader);
                 var result = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
                 bytesRead = countingStream.BytesRead;
-                
+
                 return result;
             }
             finally
@@ -879,20 +879,20 @@ namespace ApiClient.Runtime
             Interlocked.Add(ref _responseTotalCompressedBytes, headerContentLength ?? bytesRead);
         }
 
-        protected async Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result, CancellationToken cancellationToken)
+        protected Task<IHttpResponse> ReturnOnSyncContext(IHttpResponse result)
         {
-            var tcs = new TaskCompletionSource<IHttpResponse>();
-            if (cancellationToken.CanBeCanceled)
-                cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+            if (result == null)
+                throw new InvalidOperationException(
+                    $"{nameof(ReturnOnSyncContext)}: middleware returned a null {nameof(IHttpResponse)}. " +
+                    "Ensure all IApiClientMiddleware.ProcessResponse implementations return a non-null value.");
 
-            _syncCtx.Post(_ => 
-            { 
-                if(result != null && cancellationToken.IsCancellationRequested == false)
-                {
-                    tcs.SetResult(result); 
-                }
-            }, null);
-            return await tcs.Task;
+            // No sync context (e.g. unit tests, thread-pool construction) — return directly.
+            if (_syncCtx == null)
+                return Task.FromResult(result);
+
+            var tcs = new TaskCompletionSource<IHttpResponse>();
+            _syncCtx.Post(_ => tcs.SetResult(result), null);
+            return tcs.Task;
         }
 
         protected async Task<(T content, E error, string body, IHttpResponse errorResponse)> ProcessJsonResponse<T, E>(
@@ -1004,5 +1004,41 @@ namespace ApiClient.Runtime
         }
 
         #endregion
+    }
+
+    public static class ApiClientTasksExtensions
+    {
+        /// <summary>
+        /// Extension method that provides continuation with exception handling
+        /// </summary>
+        /// <param name="task"></param>
+        /// <returns></returns>
+        public static Task HandleTaskContinuation(this Task task)
+        {
+            task.ContinueWith(
+                faultedTask => Debug.LogException(faultedTask.Exception),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+
+            return task;
+        }
+
+        /// <summary>
+        /// Extension method that provides continuation with exception handling
+        /// </summary>
+        /// <param name="task"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Task<T> HandleTaskContinuation<T>(this Task<T> task)
+        {
+            task.ContinueWith(
+                faultedTask => Debug.LogException(faultedTask.Exception),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+
+            return task;
+        }
     }
 }
