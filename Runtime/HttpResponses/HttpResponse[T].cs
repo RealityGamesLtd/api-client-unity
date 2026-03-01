@@ -13,7 +13,7 @@ namespace ApiClient.Runtime.HttpResponses
     /// obtained from response's body.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, ICachedHttpResponse
+    public class HttpResponse<T> : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, IHttpResponseTiming, ICachedHttpResponse
     {
         public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, HttpRequestMessage request, HttpStatusCode statusCode)
         {
@@ -24,6 +24,7 @@ namespace ApiClient.Runtime.HttpResponses
             StatusCode = statusCode;
             ContentHeaders = contentHeaders != null ? contentHeaders.ToHeadersDictionary() : new Dictionary<string, string>();
             Body = body;
+            TimingInfo = new TimingInfo();
         }
         
         public HttpResponse(T content, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
@@ -34,6 +35,7 @@ namespace ApiClient.Runtime.HttpResponses
             StatusCode = statusCode;
             ContentHeaders = contentHeaders != null ? contentHeaders.ToHeadersDictionary() : new Dictionary<string, string>();
             Body = body;
+            TimingInfo = new TimingInfo();
         }
 
         /// <summary>
@@ -69,10 +71,19 @@ namespace ApiClient.Runtime.HttpResponses
         /// <value></value>
         public string Body { get; private set; }
 
+        public TimingInfo TimingInfo { get; set; }
+
         bool ICachedHttpResponse.IsFromCache { get; set; }
 
         public long CacheContentSize()
         {
+            // For byte arrays, use the actual content length
+            if (typeof(T) == typeof(byte[]) && Content != null)
+            {
+                // Cast to object first, then to byte[] - direct cast from generic T doesn't work
+                return ((byte[])(object)Content).Length;
+            }
+            
             // assume the content will have the same size as body.
             // this doesn't have to be the exact value
             return Body != null ? Body.Length * sizeof(char) * 2 : 1;

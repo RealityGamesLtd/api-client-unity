@@ -54,5 +54,12 @@ namespace ApiClient.Runtime
         /// </summary>
         /// <value></value>
         public bool BodyLogging { get; set; } = false;
+        
+        /// <summary>
+        /// Enable time measurement for request and deserialization.
+        /// When enabled, response objects will include timing information.
+        /// </summary>
+        /// <value></value>
+        public bool EnableTimeMeasurements { get; set; } = false;
     }
 }

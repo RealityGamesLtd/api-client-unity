@@ -101,7 +101,7 @@ namespace ApiClient.Tests
             var headers = GetContentHeaders();
 
             // Act
-            var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead);
+            var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead, out var deserializationTime);
 
             // Assert
             Assert.IsNotNull(result);
@@ -121,7 +121,7 @@ namespace ApiClient.Tests
             // Act & Assert
             Assert.Throws<JsonReaderException>(() =>
             {
-                _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead);
+                _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead, out var deserializationTime);
             });
         }
 
@@ -133,7 +133,7 @@ namespace ApiClient.Tests
             var headers = GetContentHeaders();
 
             // Act
-            var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead);
+            var result = _apiClient.TestDeserializeJson<TestModel>(stream, headers, "Test Label", out var bytesRead, out var deserializationTime);
 
             // Assert
             Assert.IsNull(result);
@@ -158,7 +158,7 @@ namespace ApiClient.Tests
             var headers = GetContentHeaders(addGzip: true);
 
             // Act
-            var result = _apiClient.TestDeserializeJson<TestModel>(compressedStream, headers, "Test Label", out var bytesRead);
+            var result = _apiClient.TestDeserializeJson<TestModel>(compressedStream, headers, "Test Label", out var bytesRead, out var deserializationTime);
 
             // Assert
             Assert.IsNotNull(result);
@@ -523,9 +523,9 @@ namespace ApiClient.Tests
             return PrepareJsonStream(source, headers);
         }
 
-        public T TestDeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)
+        public T TestDeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead, out TimeSpan deserializationTime)
         {
-            return DeserializeJson<T>(memoryStream, headers, profilerLabel, out bytesRead);
+            return DeserializeJson<T>(memoryStream, headers, profilerLabel, out bytesRead, out deserializationTime);
         }
 
         public Task<string> TestReadBodyForLoggingAsync(Stream memoryStream, HttpContentHeaders headers)
@@ -538,14 +538,14 @@ namespace ApiClient.Tests
             UpdateResponseMetrics(bytesRead, headerContentLength);
         }
 
-        public Task<(T content, E error, string body, IHttpResponse errorResponse)> TestProcessJsonResponse<T, E>(
+        public Task<(T content, E error, string body, TimeSpan deserializationTime, IHttpResponse errorResponse)> TestProcessJsonResponse<T, E>(
             HttpResponseMessage responseMessage,
             HttpRequestMessage requestMessage)
         {
             return ProcessJsonResponse<T, E>(responseMessage, requestMessage);
         }
 
-        public Task<(E error, string body, IHttpResponse errorResponse)> TestProcessJsonErrorResponse<E>(
+        public Task<(E error, string body, TimeSpan deserializationTime, IHttpResponse errorResponse)> TestProcessJsonErrorResponse<E>(
             HttpResponseMessage responseMessage,
             HttpRequestMessage requestMessage)
         {

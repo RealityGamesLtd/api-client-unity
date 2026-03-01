@@ -12,7 +12,7 @@ namespace ApiClient.Runtime.HttpResponses
     /// A type of HttpResponse where no content was
     /// obtained from response's body.
     /// </summary>
-    public class HttpResponse : IHttpResponse, IHttpResponseStatusCode, ICachedHttpResponse
+    public class HttpResponse : IHttpResponse, IHttpResponseStatusCode, IHttpResponseTiming, ICachedHttpResponse
     {
         public HttpResponse(HttpRequestMessage request, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, HttpStatusCode statusCode)
         {
@@ -21,6 +21,7 @@ namespace ApiClient.Runtime.HttpResponses
             StatusCode = statusCode;
             Headers = headers.ToHeadersDictionary();
             ContentHeaders = contentHeaders.ToHeadersDictionary();
+            TimingInfo = new TimingInfo();
         }
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace ApiClient.Runtime.HttpResponses
         public HttpStatusCode StatusCode { get; private set; }
         public Dictionary<string, string> Headers { get; private set; }
         public Dictionary<string, string> ContentHeaders { get; private set; }
+        public TimingInfo TimingInfo { get; set; }
         bool ICachedHttpResponse.IsFromCache { get; set; }
 
         public long CacheContentSize()

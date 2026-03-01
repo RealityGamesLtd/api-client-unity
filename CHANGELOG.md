@@ -7,6 +7,15 @@ All notable changes to this project will be documented in this file.
 - Added HandleTaskContinuation extension methods (generic and non-generic) to log task exceptions
 - Applied HandleTaskContinuation calls to various async operations in SendHttpRequest<T, E> method only
 
+## [Unreleased]
+### Added
+- Time measurement functionality for tracking request and deserialization times
+  - `EnableTimeMeasurements` option in `ApiClientOptions` to enable/disable timing measurements
+  - `TimingInfo` class to hold timing information (ResponseTime, DeserializationTime, TotalTime)
+  - `IHttpResponseTiming` interface implemented by all response types
+  - All response objects include timing information when measurements are enabled
+- Comprehensive tests for timing measurement functionality
+
 ## [1.3.0]
 ### Add
 - Stream deserialization support for automatic parsing of streamed data

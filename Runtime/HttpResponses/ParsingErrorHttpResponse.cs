@@ -7,7 +7,7 @@ using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime.HttpResponses
 {
-    public class ParsingErrorHttpResponse : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody
+    public class ParsingErrorHttpResponse : IHttpResponse, IHttpResponseStatusCode, IHttpResponseBody, IHttpResponseTiming
     {
         public bool IsClientError => false;
         public bool IsServerError => false;
@@ -22,6 +22,7 @@ namespace ApiClient.Runtime.HttpResponses
         public Dictionary<string, string> ContentHeaders { get; private set; }
         public HttpStatusCode StatusCode { get; private set; }
         public string Body { get; private set; }
+        public TimingInfo TimingInfo { get; set; }
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpContentHeaders contentHeaders, string body, Uri requestRequestUri, HttpStatusCode statusCode)
         {
@@ -31,6 +32,7 @@ namespace ApiClient.Runtime.HttpResponses
             StatusCode = statusCode;
             ContentHeaders = contentHeaders.ToHeadersDictionary();
             Body = body;
+            TimingInfo = new TimingInfo();
         }
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, HttpRequestMessage request)
@@ -39,6 +41,7 @@ namespace ApiClient.Runtime.HttpResponses
             Headers = headers.ToHeadersDictionary();
             RequestMethod = request.Method;
             RequestUri = request.RequestUri;
+            TimingInfo = new TimingInfo();
         }
 
         public ParsingErrorHttpResponse(string errorMessage, HttpResponseHeaders headers, Uri requestUri)
@@ -46,6 +49,7 @@ namespace ApiClient.Runtime.HttpResponses
             Message = errorMessage;
             Headers = headers.ToHeadersDictionary();
             RequestUri = requestUri;
+            TimingInfo = new TimingInfo();
         }
     }
 }
