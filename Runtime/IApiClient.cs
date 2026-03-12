@@ -6,6 +6,22 @@ using ApiClient.Runtime.Cache;
 
 namespace ApiClient.Runtime
 {
+    /// <summary>
+    /// Represents an HTTP API client capable of sending requests and tracking response metrics.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This interface inherits from <see cref="IDisposable"/>. Callers are responsible for disposing
+    /// of any <see cref="IApiClient"/> instances that they create and own, for example by using a
+    /// <c>using</c> or <c>await using</c> statement where appropriate.
+    /// </para>
+    /// <para>
+    /// Implementations of <see cref="IApiClient"/> must implement <see cref="IDisposable.Dispose"/>
+    /// to release any unmanaged or managed resources they hold (such as underlying HTTP handlers,
+    /// network connections, or caches). After an instance has been disposed, it should not be used
+    /// to send further requests.
+    /// </para>
+    /// </remarks>
     public interface IApiClient : IDisposable
     {
         /// <summary>
