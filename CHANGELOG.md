@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.3.3]
+- Make IApiClient disposable and add Dispose() implementations to ApiClient and the example mock.
+- Construct HttpClient with a configured HttpClientHandler enabling automatic gzip/deflate decompression.
+- Remove the manual gzip stream wrapper (PrepareJsonStream) and read/deserialize directly from the provided streams.
+
 ## [1.3.1]
 - Changed all catch (OperationCanceledException) blocks to catch (TaskCanceledException) throughout the file
 - Removed CancellationToken parameter and cancellation registration logic from ReturnOnSyncContext method
