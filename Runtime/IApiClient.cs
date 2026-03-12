@@ -6,7 +6,7 @@ using ApiClient.Runtime.Cache;
 
 namespace ApiClient.Runtime
 {
-    public interface IApiClient
+    public interface IApiClient : IDisposable
     {
         /// <summary>
         /// Gets the total number of bytes received in compressed format from HTTP responses.

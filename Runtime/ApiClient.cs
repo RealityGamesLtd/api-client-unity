@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Diagnostics = System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -38,14 +36,19 @@ namespace ApiClient.Runtime
         private readonly bool _bodyLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
+        private bool _disposed;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
         private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
+        private readonly HttpClientHandler _handler = new()
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+        };
 
         public ApiClient(ApiClientOptions options)
         {
             // create http client instance
-            _httpClient = new HttpClient()
+            _httpClient = new HttpClient(_handler, disposeHandler: true)
             {
                 Timeout = options.Timeout
             };
@@ -222,114 +225,76 @@ namespace ApiClient.Runtime
             return await ReturnOnSyncContext(result);
         }
 
-        /// <summary>
-        /// Make http request using HttpCLient with a specified response type to which the 
-        /// response body will be deserialized. If deserialization is inpossible it will return
-        /// <see cref="ParsingErrorHttpResponse"/>.
-        /// </summary>
-        /// <typeparam name="T">Response content type</typeparam>
-        /// <typeparam name="E">Response error type</typeparam>
-        /// <param name="req">Request to make</param>
-        /// <returns><see cref="HttpResponse"/> or 
-        /// <see cref="ParsingErrorHttpResponse"/> or 
-        /// <see cref="AbortedHttpResponse"/> or 
-        /// <see cref="TimeoutHttpResponse"/> or 
-        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<T, E>(HttpClientRequest<T, E> req)
         {
-
-            IHttpResponse response = null;
-
-            using (var handler = new HttpClientHandler())
+            var result = await Task.Run(async () =>
             {
-                handler.AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate;
+                await _middleware.ProcessRequest(req, true);
 
-                using (var client = new HttpClient(handler))
+                IHttpResponse response = null;
+
+                try
                 {
-                    // Konfiguracja nagłówków
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", req.Authentication?.Parameter);
+                    await _retryPolicies.ExecuteAsync(async (context, ct) =>
+                    {
+                        response = null;
 
-                    Diagnostics.Stopwatch timer = new Diagnostics.Stopwatch();
-                    timer.Start();
-                    using var responseMessage = await client.SendAsync(req.RequestMessage, req.CancellationToken);
-                    byte[] data = await responseMessage.Content.ReadAsByteArrayAsync();
-                    timer.Stop();
-                    Debug.Log($"Request completed in {timer.ElapsedMilliseconds} ms, content length: {data.Length}");
+                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                        request.IsSent = true;
+
+                        if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
+                        {
+                            request.Authentication = newAuthHeaderValue;
+                            context[NewAuthenticationHeaderValueKey] = null;
+                        }
+
+                        await _middleware.ProcessRequest(request, false);
+
+                        Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
+                        try
+                        {
+                            using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+
+                            var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
+
+                            response = errorResponse ?? new HttpResponse<T, E>(
+                                content,
+                                error,
+                                responseMessage.Headers,
+                                responseMessage.Content?.Headers,
+                                body,
+                                request.RequestMessage,
+                                responseMessage.StatusCode);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            if (request.CancellationToken.IsCancellationRequested)
+                                response = new AbortedHttpResponse(request.RequestMessage);
+                            else
+                                response = new TimeoutHttpResponse(request.RequestMessage);
+                        }
+                        catch (Exception ex)
+                        {
+                            var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
+                            response = new NetworkErrorHttpResponse(message, request.RequestMessage);
+                        }
+
+                        Profiler.EndSample();
+
+                        return await _middleware.ProcessResponse(response, request.RequestId, false);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
-            }
+                catch (OperationCanceledException)
+                {
+                    response = new AbortedHttpResponse(req.RequestMessage);
+                }
 
-            return response;
+                return await _middleware.ProcessResponse(response, req.RequestId, true);
+            }, req.CancellationToken);
+
+            return await ReturnOnSyncContext(result);
         }
 
-        // await _middleware.ProcessRequest(req, true);
-
-        // try
-        // {
-        //     // await _retryPolicies.ExecuteAsync(async (context, ct) =>
-        //     // {
-        //     response = null;
-
-        //     var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-        //     request.IsSent = true;
-
-        //     // if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
-        //     // {
-        //     //     request.Authentication = newAuthHeaderValue;
-        //     //     context[NewAuthenticationHeaderValueKey] = null;
-        //     // }
-
-        //     // await _middleware.ProcessRequest(request, false);
-
-        //     try
-        //     {
-
-        //         Diagnostics.Stopwatch timer = new Diagnostics.Stopwatch();
-        //         timer.Start();
-        //         using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
-        //         byte[] data = await responseMessage.Content.ReadAsByteArrayAsync();
-        //         timer.Stop();
-        //         Debug.Log($"Request completed in {timer.ElapsedMilliseconds} ms, content length: {data.Length}");
-
-        //             // var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
-        //             response = new HttpResponse<T, E>(
-        //                 default,
-        //                 default,
-        //                 null,
-        //                 null,
-        //                 null,
-        //                 null,
-        //                 System.Net.HttpStatusCode.OK);
-
-        //             // response = errorResponse ?? new HttpResponse<T, E>(
-        //             //     content,
-        //             //     error,
-        //             //     responseMessage.Headers,
-        //             //     responseMessage.Content?.Headers,
-        //             //     body,
-        //             //     request.RequestMessage,
-        //             //     responseMessage.StatusCode);
-        //         }
-        //         catch (OperationCanceledException)
-        //     {
-        //         response = request.CancellationToken.IsCancellationRequested
-        //             ? new AbortedHttpResponse(request.RequestMessage)
-        //             : new TimeoutHttpResponse(request.RequestMessage);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         response = new NetworkErrorHttpResponse($"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n", request.RequestMessage);
-        //     }
-
-        //     return response;
-        //     // }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
-        // }
-        // catch (OperationCanceledException)
-        // {
-        //     response = new AbortedHttpResponse(req.RequestMessage);
-        // }
-
-        // return await _middleware.ProcessResponse(response, req.RequestId, true);
-        // }
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req)
         {
@@ -483,7 +448,7 @@ namespace ApiClient.Runtime
                             }
 
                             await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                            var responseStream = PrepareJsonStream(contentStream, responseMessage.Content.Headers);
+                            var responseStream = contentStream;
 
                             var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
                             var totalBytesRead = 0L;
@@ -849,19 +814,10 @@ namespace ApiClient.Runtime
 
         #region Helper Methods
 
-        protected Stream PrepareJsonStream(Stream source, HttpContentHeaders headers)
-        {
-            if (headers.ContentEncoding.Contains("gzip"))
-            {
-                return new GZipStream(source, CompressionMode.Decompress);
-            }
-            return source;
-        }
-
         protected T DeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)
         {
             memoryStream.Position = 0;
-            var jsonStream = PrepareJsonStream(memoryStream, headers);
+            var jsonStream = memoryStream;
 
             Profiler.BeginSample(profilerLabel);
             try
@@ -889,7 +845,7 @@ namespace ApiClient.Runtime
             try
             {
                 memoryStream.Position = 0;
-                var bodyJsonStream = PrepareJsonStream(memoryStream, headers);
+                var bodyJsonStream = memoryStream;
                 using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
                 return await bodyStreamReader.ReadToEndAsync();
             }
@@ -1027,6 +983,27 @@ namespace ApiClient.Runtime
             }
 
             return (error, body, errorResponse);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _httpClient.Dispose();
+            }
+
+            _disposed = true;
         }
 
         #endregion
