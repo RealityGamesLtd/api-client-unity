@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -40,54 +39,6 @@ namespace ApiClient.Tests
         {
             _apiClient = null;
         }
-
-        #region PrepareJsonStream Tests
-
-        [Test]
-        public void PrepareJsonStream_WithoutGzip_ReturnsOriginalStream()
-        {
-            // Arrange
-            using var originalStream = new MemoryStream(Encoding.UTF8.GetBytes("test data"));
-            var headers = GetContentHeaders();
-
-            // Act
-            var resultStream = _apiClient.TestPrepareJsonStream(originalStream, headers);
-
-            // Assert
-            Assert.AreEqual(originalStream, resultStream);
-        }
-
-        [Test]
-        public void PrepareJsonStream_WithGzip_ReturnsGZipStream()
-        {
-            // Arrange
-            using var originalStream = new MemoryStream();
-            var headers = GetContentHeaders(addGzip: true);
-
-            // Act
-            var resultStream = _apiClient.TestPrepareJsonStream(originalStream, headers);
-
-            // Assert
-            Assert.IsInstanceOf<GZipStream>(resultStream);
-        }
-
-        [Test]
-        public void PrepareJsonStream_WithMultipleEncodings_ReturnsGZipStreamWhenGzipPresent()
-        {
-            // Arrange
-            using var originalStream = new MemoryStream();
-            var headers = GetContentHeaders();
-            headers.ContentEncoding.Add("deflate");
-            headers.ContentEncoding.Add("gzip");
-
-            // Act
-            var resultStream = _apiClient.TestPrepareJsonStream(originalStream, headers);
-
-            // Assert
-            Assert.IsInstanceOf<GZipStream>(resultStream);
-        }
-
-        #endregion
 
         #region DeserializeJson Tests
 
@@ -141,30 +92,19 @@ namespace ApiClient.Tests
         }
 
         [Test]
-        public void DeserializeJson_WithGzipCompression_DeserializesCorrectly()
+        public void DeserializeJson_WithGzipContent_Throws()
         {
             // Arrange
             var testObject = new TestModel { Id = 456, Name = "Compressed" };
             var json = JsonConvert.SerializeObject(testObject);
-            using var compressedStream = new MemoryStream();
-            
-            using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Compress, true))
-            {
-                var jsonBytes = Encoding.UTF8.GetBytes(json);
-                gzipStream.Write(jsonBytes, 0, jsonBytes.Length);
-            }
-            
-            compressedStream.Position = 0;
+            using var compressedStream = CreateGzipStream(json);
             var headers = GetContentHeaders(addGzip: true);
 
-            // Act
-            var result = _apiClient.TestDeserializeJson<TestModel>(compressedStream, headers, "Test Label", out var bytesRead);
-
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual(456, result.Id);
-            Assert.AreEqual("Compressed", result.Name);
-            Assert.Greater(bytesRead, 0);
+            // Act & Assert
+            Assert.Throws<JsonReaderException>(() =>
+            {
+                _apiClient.TestDeserializeJson<TestModel>(compressedStream, headers, "Test Label", out _);
+            });
         }
 
         #endregion
@@ -203,19 +143,11 @@ namespace ApiClient.Tests
         }
 
         [Test]
-        public async Task ReadBodyForLoggingAsync_WithGzipContent_DecompressesAndReturnsBody()
+        public async Task ReadBodyForLoggingAsync_WithGzipContent_ReturnsRawCompressedBody()
         {
             // Arrange
             var bodyContent = "Compressed body content";
-            using var compressedStream = new MemoryStream();
-            
-            using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Compress, true))
-            {
-                var contentBytes = Encoding.UTF8.GetBytes(bodyContent);
-                gzipStream.Write(contentBytes, 0, contentBytes.Length);
-            }
-            
-            compressedStream.Position = 0;
+            using var compressedStream = CreateGzipStream(bodyContent);
             var headers = GetContentHeaders(addGzip: true);
             var loggingClient = CreateApiClient(bodyLoggingEnabled: true);
 
@@ -223,7 +155,8 @@ namespace ApiClient.Tests
             var result = await loggingClient.TestReadBodyForLoggingAsync(compressedStream, headers);
 
             // Assert
-            Assert.AreEqual(bodyContent, result);
+            Assert.AreNotEqual(bodyContent, result);
+            Assert.IsNotEmpty(result);
         }
 
         #endregion
@@ -472,6 +405,19 @@ namespace ApiClient.Tests
             return httpContent.Headers;
         }
 
+        private MemoryStream CreateGzipStream(string content)
+        {
+            var compressedStream = new MemoryStream();
+            using (var gzipStream = new System.IO.Compression.GZipStream(compressedStream, System.IO.Compression.CompressionMode.Compress, true))
+            {
+                var contentBytes = Encoding.UTF8.GetBytes(content);
+                gzipStream.Write(contentBytes, 0, contentBytes.Length);
+            }
+
+            compressedStream.Position = 0;
+            return compressedStream;
+        }
+
         private ApiClientTestable CreateApiClient(bool bodyLoggingEnabled)
         {
             var options = new ApiClientOptions
@@ -516,11 +462,6 @@ namespace ApiClient.Tests
     {
         public ApiClientTestable(ApiClientOptions options) : base(options)
         {
-        }
-
-        public Stream TestPrepareJsonStream(Stream source, HttpContentHeaders headers)
-        {
-            return PrepareJsonStream(source, headers);
         }
 
         public T TestDeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)

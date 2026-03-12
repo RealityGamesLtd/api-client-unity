@@ -62,5 +62,10 @@ namespace ApiClient.Runtime
                 return SendHttpRequestDoubleGenericFunc(req as HttpClientRequest<object, object>);
             throw new NotImplementedException("Mock response not set for SendHttpRequest<T, E>");
         }
+
+        public void Dispose()
+        {
+            // No resources to dispose in this mock implementation
+        }
     }
 }
