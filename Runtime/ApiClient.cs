@@ -28,6 +28,7 @@ namespace ApiClient.Runtime
         public UrlCache Cache { get; } = new();
 
         private readonly HttpClient _httpClient;
+        private readonly HttpClient _streamHttpClient;
         private readonly IApiClientMiddleware _middleware;
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
@@ -40,15 +41,26 @@ namespace ApiClient.Runtime
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
         private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
-        private readonly HttpClientHandler _handler = new()
+        private readonly HttpClientHandler _httpClientHandler = new()
         {
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+        };
+
+        private readonly HttpClientHandler _streamHttpClientHandler = new()
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.None
         };
 
         public ApiClient(ApiClientOptions options)
         {
             // create http client instance
-            _httpClient = new HttpClient(_handler, disposeHandler: true)
+            _httpClient = new HttpClient(_httpClientHandler, disposeHandler: true)
+            {
+                Timeout = options.Timeout
+            };
+
+            // create stream http client instance
+            _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
             {
                 Timeout = options.Timeout
             };
@@ -96,8 +108,12 @@ namespace ApiClient.Runtime
                     {
                         response = null;
 
-                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                        request.IsSent = true;
+                        HttpClientRequest request;
+                        lock (req)
+                        {
+                            request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                            request.IsSent = true;
+                        }
 
                         if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
@@ -169,8 +185,12 @@ namespace ApiClient.Runtime
                     {
                         response = null;
 
-                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                        request.IsSent = true;
+                        HttpClientRequest<E> request;
+                        lock (req)
+                        {
+                            request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                            request.IsSent = true;
+                        }
 
                         if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
@@ -250,8 +270,12 @@ namespace ApiClient.Runtime
                     {
                         response = null;
 
-                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                        request.IsSent = true;
+                        HttpClientRequest<T, E> request;
+                        lock (req)
+                        {
+                            request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                            request.IsSent = true;
+                        }
 
                         if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
@@ -321,8 +345,12 @@ namespace ApiClient.Runtime
                     {
                         response = null;
 
-                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                        request.IsSent = true;
+                        HttpClientHeadersRequest request;
+                        lock (req)
+                        {
+                            request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                            request.IsSent = true;
+                        }
 
                         if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
@@ -335,11 +363,9 @@ namespace ApiClient.Runtime
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(
-                                req.RequestMessage,
+                                request.RequestMessage,
                                 HttpCompletionOption.ResponseHeadersRead,
-                                req.CancellationToken);
-
-                            req.IsSent = true;
+                                request.CancellationToken);
 
                             if (!responseMessage.IsSuccessStatusCode)
                             {
@@ -353,7 +379,7 @@ namespace ApiClient.Runtime
                                     responseMessage.Headers,
                                     null,
                                     null,
-                                    req.RequestMessage,
+                                    request.RequestMessage,
                                     responseMessage.StatusCode);
                                 return response;
                             }
@@ -368,7 +394,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content?.Headers,
                                 null,
-                                req.RequestMessage,
+                                request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
                         catch (OperationCanceledException)
@@ -414,8 +440,12 @@ namespace ApiClient.Runtime
                     {
                         response = null;
 
-                        var request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
-                        request.IsSent = true;
+                        HttpClientByteArrayRequest request;
+                        lock (req)
+                        {
+                            request = req.IsSent ? req.RecreateWithHttpRequestMessage() : req;
+                            request.IsSent = true;
+                        }
 
                         if (context[NewAuthenticationHeaderValueKey] is AuthenticationHeaderValue newAuthHeaderValue)
                         {
@@ -430,11 +460,9 @@ namespace ApiClient.Runtime
                             byte[] responseBytes = null;
 
                             using var responseMessage = await _httpClient.SendAsync(
-                                req.RequestMessage,
+                                request.RequestMessage,
                                 HttpCompletionOption.ResponseHeadersRead,
-                                req.CancellationToken);
-
-                            req.IsSent = true;
+                                request.CancellationToken);
 
                             if (!responseMessage.IsSuccessStatusCode)
                             {
@@ -448,7 +476,7 @@ namespace ApiClient.Runtime
                                     responseMessage.Headers,
                                     null,
                                     null,
-                                    req.RequestMessage,
+                                    request.RequestMessage,
                                     responseMessage.StatusCode);
                                 return response;
                             }
@@ -514,7 +542,7 @@ namespace ApiClient.Runtime
                                 responseMessage.Headers,
                                 responseMessage.Content?.Headers,
                                 null,
-                                req.RequestMessage,
+                                request.RequestMessage,
                                 responseMessage.StatusCode);
                         }
                         catch (OperationCanceledException)
@@ -571,13 +599,21 @@ namespace ApiClient.Runtime
 
                 try
                 {
-                    request.IsSent = true;
+                    lock (request)
+                    {
+                        if (request.IsSent)
+                        {
+                            throw new InvalidOperationException("This request has already been sent and cannot be sent again.");
+                        }
+
+                        request.IsSent = true;
+                    }
 
                     await _middleware.ProcessRequest(request, true);
 
                     Profiler.BeginSample($"Api Client Execute Stream Request: {request.Uri}");
 
-                    using var responseMessage = await _httpClient.SendAsync(
+                    using var responseMessage = await _streamHttpClient.SendAsync(
                         request.RequestMessage,
                         HttpCompletionOption.ResponseHeadersRead,
                         request.CancellationToken);
@@ -1012,6 +1048,7 @@ namespace ApiClient.Runtime
             if (disposing)
             {
                 _httpClient.Dispose();
+                _streamHttpClient.Dispose();
             }
 
             _disposed = true;

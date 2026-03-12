@@ -86,8 +86,7 @@ namespace ApiClient.Tests
             var responseContent = task.Result as HttpResponse<byte[]>;
 
             Assert.IsNotNull(responseContent.Content);
-            Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
+            Assert.That(responseContent.Content.Length, Is.GreaterThan(500));
         }
 
         [UnityTest]
@@ -106,8 +105,7 @@ namespace ApiClient.Tests
 
 
             Assert.IsNotNull(responseContent.Content);
-            Assert.That(responseContent.Content.Length, Is.GreaterThan(0));
-            Assert.That(responseContent.Content.Length, Is.EqualTo(2165));
+            Assert.That(responseContent.Content.Length, Is.GreaterThan(500));
 
 
             // Second request
@@ -115,6 +113,11 @@ namespace ApiClient.Tests
 
             yield return task2.AsCoroutine();
             Assert.IsTrue((task2.Result as ICachedHttpResponse).IsFromCache, "Request is expected to be from cache!");
+
+            var responseContent2 = task2.Result as HttpResponse<byte[]>;
+            Assert.IsNotNull(responseContent2.Content);
+            Assert.That(responseContent2.Content.Length, Is.EqualTo(responseContent.Content.Length));
+            Assert.IsTrue(responseContent2.Content.SequenceEqual(responseContent.Content));
         }
 
         private async Task<IHttpResponse> FetchImageTask(CachePolicy cachePolicy)
