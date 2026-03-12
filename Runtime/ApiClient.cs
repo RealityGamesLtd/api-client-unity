@@ -225,6 +225,17 @@ namespace ApiClient.Runtime
             return await ReturnOnSyncContext(result);
         }
 
+        /// <summary>
+        /// Sends an HTTP request and returns a typed response.
+        /// </summary>
+        /// <typeparam name="T">Response body type.</typeparam>
+        /// <typeparam name="E">Response error type.</typeparam>
+        /// <param name="req">Request to make.</param>
+        /// <returns><see cref="HttpResponse"/> or 
+        /// <see cref="ParsingErrorHttpResponse"/> or 
+        /// <see cref="AbortedHttpResponse"/> or 
+        /// <see cref="TimeoutHttpResponse"/> or 
+        /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<T, E>(HttpClientRequest<T, E> req)
         {
             var result = await Task.Run(async () =>
