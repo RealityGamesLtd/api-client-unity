@@ -742,17 +742,15 @@ namespace ApiClient.Runtime
                                                 Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} Got stream message:{jsonString}");
                                             }
 
-                                            OnStreamResponse?.PostOnMainThread(await _middleware.ProcessResponse(
-                                                new HttpResponse<T>(
-                                                    content,
-                                                    responseMessage.Headers,
-                                                    responseMessage.Content?.Headers,
-                                                    jsonString,
-                                                    request.RequestMessage.RequestUri,
-                                                    responseMessage.StatusCode),
-                                                request.RequestId,
-                                                false),
-                                                _syncCtx);
+                                            var response = new HttpResponse<T>(
+                                                content,
+                                                responseMessage.Headers,
+                                                responseMessage.Content?.Headers,
+                                                jsonString,
+                                                request.RequestMessage.RequestUri,
+                                                responseMessage.StatusCode);
+
+                                            OnStreamResponse?.PostOnMainThread(response, _syncCtx);
                                         }
                                         catch (Exception ex)
                                         {

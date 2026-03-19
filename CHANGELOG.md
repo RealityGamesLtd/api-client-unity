@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.3.4]
+- When valid SSE message is received, the IApiClientMiddleware.ProcessResponse will not be invoked
+
 ## [1.3.3]
 - Make IApiClient disposable and add Dispose() implementations to ApiClient and the example mock.
 - Construct HttpClient with a configured HttpClientHandler enabling automatic gzip/deflate decompression.
