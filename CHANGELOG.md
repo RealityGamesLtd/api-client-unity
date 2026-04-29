@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.4.0]
+### Add
+- Gameplay vs asset priority lane. New `RequestPriorityCoordinator` (in `ApiClient.Runtime.Priority`) gives gameplay HTTP traffic priority over bulk byte-array (asset) downloads on bandwidth-constrained networks (notably 3G).
+- New `ApiClientOptions.PriorityCoordinator`, `ApiClientOptions.RangeDownload` and `ApiClientOptions.Lane` options. Default off — `PriorityCoordinator = null` keeps the legacy single-pool behaviour and is fully back-compat.
+- When the coordinator is configured, `SendByteArrayRequest` runs through a dedicated `_assetHttpClient` (separate connection pool, `AutomaticDecompression = None`) and uses HTTP `Range` chunked downloads. Asset workers gate between chunks on `WaitForGameplayIdleAsync` so a long asset transfer pauses while gameplay requests are in flight.
+- Per-chunk retry inside the chunked path so a transient packet loss mid-transfer doesn't throw away the bytes already received. Outer Polly retry still applies on exhaustion.
+- Graceful fallback: if the server returns `200` to the Range probe (Range not honoured) or returns `200` mid-transfer, the download falls back to a single-GET drain (with optional gate-between-buffer-reads).
+- `ApiClientConnection` two-instance constructor: separate gameplay and asset `IApiClient` instances sharing one `RequestPriorityCoordinator`.
+- `ApiClientLane` enum (`Mixed | Gameplay | Asset`) for advanced topologies.
+- `PriorityCoordinatorTests` covering coordinator semantics, fairness ceiling and bulkhead.
+
 ## [1.3.4]
 - When valid SSE message is received, the IApiClientMiddleware.ProcessResponse will not be invoked
 
