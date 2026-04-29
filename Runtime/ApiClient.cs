@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -9,6 +10,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Priority;
 using System.Threading;
 using ApiClient.Runtime.Cache;
 using Polly.Wrap;
@@ -29,6 +31,7 @@ namespace ApiClient.Runtime
 
         private readonly HttpClient _httpClient;
         private readonly HttpClient _streamHttpClient;
+        private readonly HttpClient _assetHttpClient;
         private readonly IApiClientMiddleware _middleware;
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
@@ -37,33 +40,63 @@ namespace ApiClient.Runtime
         private readonly bool _bodyLogging;
         private readonly SynchronizationContext _syncCtx = SynchronizationContext.Current;
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
+        private readonly RequestPriorityCoordinator _priority;
+        private readonly RangeChunkedDownloadOptions _rangeOpts;
+        private readonly ApiClientLane _lane;
         private bool _disposed;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
         private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
-        private readonly HttpClientHandler _httpClientHandler = new()
-        {
-            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
-        };
-
-        private readonly HttpClientHandler _streamHttpClientHandler = new()
-        {
-            AutomaticDecompression = System.Net.DecompressionMethods.None
-        };
+        private readonly HttpClientHandler _httpClientHandler;
+        private readonly HttpClientHandler _streamHttpClientHandler;
+        private readonly HttpClientHandler _assetHttpClientHandler;
 
         public ApiClient(ApiClientOptions options)
         {
-            // create http client instance
-            _httpClient = new HttpClient(_httpClientHandler, disposeHandler: true)
-            {
-                Timeout = options.Timeout
-            };
+            _priority = options.PriorityCoordinator;
+            _rangeOpts = options.RangeDownload ?? new RangeChunkedDownloadOptions();
+            _lane = options.Lane;
 
-            // create stream http client instance
-            _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
+            // Always-on handlers + clients depending on lane.
+            // Asset-only instances skip the gameplay/stream pools entirely.
+            if (_lane != ApiClientLane.Asset)
             {
-                Timeout = options.Timeout
-            };
+                _httpClientHandler = new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                };
+                _httpClient = new HttpClient(_httpClientHandler, disposeHandler: true)
+                {
+                    Timeout = options.Timeout
+                };
+
+                _streamHttpClientHandler = new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.None
+                };
+                _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
+                {
+                    Timeout = options.Timeout
+                };
+            }
+
+            // Asset client: built when this instance services asset traffic AND a coordinator
+            // is present (Mixed) OR when the instance is dedicated to assets.
+            // Range downloads must run with AutomaticDecompression = None — Range over a
+            // gzip-compressed entity makes byte offsets undefined.
+            var needAssetClient = _lane == ApiClientLane.Asset
+                || (_lane == ApiClientLane.Mixed && _priority != null);
+            if (needAssetClient)
+            {
+                _assetHttpClientHandler = new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.None
+                };
+                _assetHttpClient = new HttpClient(_assetHttpClientHandler, disposeHandler: true)
+                {
+                    Timeout = options.Timeout
+                };
+            }
 
             // assign middleware
             _middleware = options.Middleware ?? new DefaultApiClientMiddleware();
@@ -86,6 +119,20 @@ namespace ApiClient.Runtime
             _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
         }
 
+        // Returns the HttpClient that should service byte-array (asset) downloads for this
+        // instance. Falls back to the gameplay client when no dedicated asset client was
+        // built (legacy behaviour or asset-disabled lane).
+        private HttpClient AssetClient => _assetHttpClient ?? _httpClient;
+
+        // Increments the gameplay-in-flight counter when the coordinator is configured AND
+        // this instance is not asset-only. The returned scope is allocation-free; default
+        // value is a no-op so the call site can use `using var` unconditionally.
+        private GameplayScope EnterGameplayIfApplicable()
+        {
+            if (_priority == null || _lane == ApiClientLane.Asset) return default;
+            return _priority.EnterGameplay();
+        }
+
         /// <summary>
         /// Make http request using HttpCLient with no body processing.
         /// </summary>
@@ -98,6 +145,8 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
+                using var __gameplay = EnterGameplayIfApplicable();
+
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -175,6 +224,8 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
+                using var __gameplay = EnterGameplayIfApplicable();
+
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -260,6 +311,8 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
+                using var __gameplay = EnterGameplayIfApplicable();
+
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -335,6 +388,8 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
+                using var __gameplay = EnterGameplayIfApplicable();
+
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -434,6 +489,8 @@ namespace ApiClient.Runtime
 
                 IHttpResponse response = null;
 
+                var contextHttpClient = AssetClient;
+
                 try
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
@@ -455,95 +512,25 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
+                        IDisposable assetSlot = null;
                         try
                         {
-                            byte[] responseBytes = null;
-
-                            using var responseMessage = await _httpClient.SendAsync(
-                                request.RequestMessage,
-                                HttpCompletionOption.ResponseHeadersRead,
-                                request.CancellationToken);
-
-                            if (!responseMessage.IsSuccessStatusCode)
+                            // Bulkhead acquire — only when coordinator is configured. The
+                            // legacy path keeps unbounded concurrency to preserve back-compat.
+                            if (_priority != null)
                             {
-                                if (_verboseLogging)
-                                {
-                                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
-                                }
-
-                                response = new HttpResponse<byte[]>(
-                                    default,
-                                    responseMessage.Headers,
-                                    null,
-                                    null,
-                                    request.RequestMessage,
-                                    responseMessage.StatusCode);
-                                return response;
+                                assetSlot = await _priority.AcquireAssetSlotAsync(request.CancellationToken).ConfigureAwait(false);
                             }
 
-                            if (_verboseLogging)
+                            if (_priority != null && _rangeOpts.UseRangeRequests)
                             {
-                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                                response = await ChunkedByteArrayDownloadAsync(request, progressCallback, AssetClient, request.CancellationToken).ConfigureAwait(false);
                             }
-
-                            await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                            var responseStream = contentStream;
-
-                            var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
-                            var totalBytesRead = 0L;
-                            var buffer = new byte[_byteArrayBufferSize];
-                            var isMoreToRead = true;
-
-                            using var memoryStream = new MemoryStream();
-
-                            do
+                            else
                             {
-                                if (req.CancellationToken.IsCancellationRequested)
-                                {
-                                    throw new TaskCanceledException();
-                                }
-
-                                var bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, req.CancellationToken);
-                                if (bytesRead == 0)
-                                {
-                                    isMoreToRead = false;
-
-                                    if (_verboseLogging)
-                                    {
-                                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
-                                    }
-
-                                    continue;
-                                }
-
-                                await memoryStream.WriteAsync(buffer, 0, bytesRead);
-                                totalBytesRead += bytesRead;
-
-                                if (_verboseLogging)
-                                {
-                                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
-                                }
-
-                                progressCallback?.PostOnMainThread(new(totalBytesRead, contentLengthFromHeader), _syncCtx);
+                                var gate = _priority != null && _rangeOpts.FallbackPreemptInBufferLoop;
+                                response = await LegacyByteArrayDownloadAsync(request, progressCallback, AssetClient, gate, request.CancellationToken).ConfigureAwait(false);
                             }
-                            while (isMoreToRead && !ct.IsCancellationRequested);
-
-                            if (ct.IsCancellationRequested)
-                            {
-                                throw new TaskCanceledException();
-                            }
-
-                            responseBytes = memoryStream.ToArray();
-
-                            UpdateResponseMetrics(responseBytes.Length, contentLengthFromHeader);
-
-                            response = new HttpResponse<byte[]>(
-                                responseBytes,
-                                responseMessage.Headers,
-                                responseMessage.Content?.Headers,
-                                null,
-                                request.RequestMessage,
-                                responseMessage.StatusCode);
                         }
                         catch (OperationCanceledException)
                         {
@@ -557,9 +544,13 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
+                        finally
+                        {
+                            assetSlot?.Dispose();
+                        }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, contextHttpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -570,6 +561,391 @@ namespace ApiClient.Runtime
             }, req.CancellationToken);
 
             return await ReturnOnSyncContext(result);
+        }
+
+        /// <summary>
+        /// Single-stream byte-array download. When <paramref name="gateBetweenReads"/> is
+        /// true, awaits the priority coordinator's idle gate before each <c>ReadAsync</c>
+        /// so a saturated download yields some bandwidth back to gameplay traffic via TCP
+        /// back-pressure (less effective than chunk-level preemption but safe).
+        /// </summary>
+        private async Task<IHttpResponse> LegacyByteArrayDownloadAsync(
+            HttpClientByteArrayRequest request,
+            Action<ByteArrayRequestProgress> progressCallback,
+            HttpClient client,
+            bool gateBetweenReads,
+            CancellationToken ct)
+        {
+            using var responseMessage = await client.SendAsync(
+                request.RequestMessage,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct).ConfigureAwait(false);
+
+            return await DrainResponseToByteArrayResponseAsync(
+                request, responseMessage, progressCallback, gateBetweenReads, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Drains the body of an already-issued response into a byte[] response, with
+        /// optional gameplay-idle gate between buffer reads. Used by both the legacy path
+        /// and the Range-fallback path (when probe returned 200).
+        /// </summary>
+        private async Task<IHttpResponse> DrainResponseToByteArrayResponseAsync(
+            HttpClientByteArrayRequest request,
+            HttpResponseMessage responseMessage,
+            Action<ByteArrayRequestProgress> progressCallback,
+            bool gateBetweenReads,
+            CancellationToken ct)
+        {
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                if (_verboseLogging)
+                {
+                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+                }
+
+                return new HttpResponse<byte[]>(
+                    default,
+                    responseMessage.Headers,
+                    null,
+                    null,
+                    request.RequestMessage,
+                    responseMessage.StatusCode);
+            }
+
+            if (_verboseLogging)
+            {
+                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
+            }
+
+            await using var contentStream = await responseMessage.Content.ReadAsStreamAsync().ConfigureAwait(false);
+
+            var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
+            var totalBytesRead = 0L;
+            var buffer = new byte[_byteArrayBufferSize];
+            var isMoreToRead = true;
+
+            using var memoryStream = new MemoryStream();
+
+            do
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (gateBetweenReads && _priority != null)
+                {
+                    await _priority.WaitForGameplayIdleAsync(ct, _priority.Options.AssetFairnessMaxPause).ConfigureAwait(false);
+                }
+
+                var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    isMoreToRead = false;
+
+                    if (_verboseLogging)
+                    {
+                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                    }
+
+                    continue;
+                }
+
+                await memoryStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
+                totalBytesRead += bytesRead;
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
+                }
+
+                progressCallback?.PostOnMainThread(new ByteArrayRequestProgress(totalBytesRead, contentLengthFromHeader), _syncCtx);
+            }
+            while (isMoreToRead);
+
+            ct.ThrowIfCancellationRequested();
+
+            var responseBytes = memoryStream.ToArray();
+
+            UpdateResponseMetrics(responseBytes.Length, contentLengthFromHeader);
+
+            return new HttpResponse<byte[]>(
+                responseBytes,
+                responseMessage.Headers,
+                responseMessage.Content?.Headers,
+                null,
+                request.RequestMessage,
+                responseMessage.StatusCode);
+        }
+
+        /// <summary>
+        /// Chunked HTTP Range download. The first request doubles as a probe and the first
+        /// chunk: if the server answers <c>206 Partial Content</c>, we parse the total size
+        /// from <c>Content-Range</c> and loop the remaining ranges. Between chunks we await
+        /// the coordinator's gameplay-idle gate so the asset transfer pauses while gameplay
+        /// requests are in flight (sub-second preemption granularity).
+        ///
+        /// If the server answers <c>200 OK</c> (Range not honoured) we transparently fall
+        /// back to draining the same response stream as a legacy single-GET, with the
+        /// same gate-between-reads behaviour.
+        ///
+        /// On a successful chunked assembly the synthesized response carries
+        /// <c>HttpStatusCode.OK</c> so the URL cache stores it as a normal success and
+        /// downstream consumers don't see a <c>206</c>.
+        /// </summary>
+        private async Task<IHttpResponse> ChunkedByteArrayDownloadAsync(
+            HttpClientByteArrayRequest request,
+            Action<ByteArrayRequestProgress> progressCallback,
+            HttpClient client,
+            CancellationToken ct)
+        {
+            var chunkSize = Math.Max(1, _rangeOpts.ChunkSizeBytes);
+
+            // Probe = first chunk: ask for bytes 0..chunkSize-1. If the server honours Range
+            // we get 206 + Content-Range; if it doesn't we get the full body in 200.
+            request.RequestMessage.Headers.Range = new RangeHeaderValue(0, chunkSize - 1);
+
+            using var probeResponse = await client.SendAsync(
+                request.RequestMessage,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct).ConfigureAwait(false);
+
+            if (!probeResponse.IsSuccessStatusCode)
+            {
+                if (_verboseLogging)
+                {
+                    Debug.LogError($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} probe statusCode:{probeResponse.StatusCode}");
+                }
+                return new HttpResponse<byte[]>(
+                    default,
+                    probeResponse.Headers,
+                    null,
+                    null,
+                    request.RequestMessage,
+                    probeResponse.StatusCode);
+            }
+
+            if (probeResponse.StatusCode != HttpStatusCode.PartialContent)
+            {
+                // Server ignored Range — drain as legacy single-GET with optional gate.
+                return await DrainResponseToByteArrayResponseAsync(
+                    request,
+                    probeResponse,
+                    progressCallback,
+                    gateBetweenReads: _rangeOpts.FallbackPreemptInBufferLoop,
+                    ct).ConfigureAwait(false);
+            }
+
+            var totalLength = probeResponse.Content.Headers.ContentRange?.Length ?? -1L;
+            if (totalLength < 0)
+            {
+                // 206 without parseable Content-Range total. Drain what we have and exit.
+                if (_verboseLogging)
+                {
+                    Debug.LogWarning($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} 206 without Content-Range length, falling back to single drain.");
+                }
+                return await DrainResponseToByteArrayResponseAsync(
+                    request,
+                    probeResponse,
+                    progressCallback,
+                    gateBetweenReads: _rangeOpts.FallbackPreemptInBufferLoop,
+                    ct).ConfigureAwait(false);
+            }
+
+            using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, int.MaxValue));
+
+            // 1. Drain first chunk into the assembly buffer.
+            await using (var firstChunkStream = await probeResponse.Content.ReadAsStreamAsync().ConfigureAwait(false))
+            {
+                await firstChunkStream.CopyToAsync(memoryStream, _byteArrayBufferSize, ct).ConfigureAwait(false);
+            }
+            var offset = memoryStream.Length;
+            progressCallback?.PostOnMainThread(new ByteArrayRequestProgress(offset, totalLength), _syncCtx);
+
+            // 2. Loop remaining chunks. Each chunk is a fresh HttpRequestMessage cloned from
+            // the original (HttpRequestMessage cannot be reused across SendAsync calls).
+            while (offset < totalLength)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                // Coarse-grained preemption: pause if any gameplay request is in flight.
+                await _priority.WaitForGameplayIdleAsync(ct, _priority.Options.AssetFairnessMaxPause).ConfigureAwait(false);
+
+                var chunkEnd = Math.Min(offset + chunkSize - 1, totalLength - 1);
+
+                var chunkResult = await DownloadOneChunkAsync(
+                    request, client, memoryStream, offset, chunkEnd, totalLength, progressCallback, ct).ConfigureAwait(false);
+
+                if (chunkResult.legacyFallbackResponse != null)
+                {
+                    return chunkResult.legacyFallbackResponse; // server stopped honouring Range mid-transfer
+                }
+
+                if (!chunkResult.succeeded)
+                {
+                    // exhausted per-chunk retries with a server-side error response (4xx/5xx).
+                    return chunkResult.lastErrorResponse;
+                }
+
+                offset = chunkEnd + 1;
+                progressCallback?.PostOnMainThread(new ByteArrayRequestProgress(offset, totalLength), _syncCtx);
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            var responseBytes = memoryStream.ToArray();
+            UpdateResponseMetrics(responseBytes.Length, totalLength);
+
+            // Synthesize a 200 OK so URL cache stores the assembled response normally and
+            // downstream consumers never see 206.
+            return new HttpResponse<byte[]>(
+                responseBytes,
+                probeResponse.Headers,
+                probeResponse.Content?.Headers,
+                null,
+                request.RequestMessage,
+                HttpStatusCode.OK);
+        }
+
+        /// <summary>
+        /// Downloads one Range chunk into <paramref name="memoryStream"/>. Per-chunk retries
+        /// transient network errors so a mid-transfer hiccup does not throw away the bytes
+        /// already received. On exhaustion rethrows so the outer Polly wrap can retry the
+        /// whole transfer.
+        /// </summary>
+        /// <returns>
+        /// Tuple of (succeeded, legacyFallbackResponse, lastErrorResponse).
+        /// When the server returns 200 mid-transfer (Range no longer honoured),
+        /// <c>legacyFallbackResponse</c> is non-null and the chunked path aborts.
+        /// </returns>
+        private async Task<(bool succeeded, IHttpResponse legacyFallbackResponse, IHttpResponse lastErrorResponse)> DownloadOneChunkAsync(
+            HttpClientByteArrayRequest request,
+            HttpClient client,
+            MemoryStream memoryStream,
+            long offset,
+            long chunkEnd,
+            long totalLength,
+            Action<ByteArrayRequestProgress> progressCallback,
+            CancellationToken ct)
+        {
+            var attempts = Math.Max(1, _rangeOpts.MaxChunkRetries + 1);
+
+            for (var attempt = 0; attempt < attempts; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                using var chunkRequest = CloneRequestForRange(request.RequestMessage, offset, chunkEnd);
+                try
+                {
+                    using var chunkResponse = await client.SendAsync(
+                        chunkRequest,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        ct).ConfigureAwait(false);
+
+                    if (chunkResponse.StatusCode == HttpStatusCode.PartialContent)
+                    {
+                        await using var chunkStream = await chunkResponse.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                        await chunkStream.CopyToAsync(memoryStream, _byteArrayBufferSize, ct).ConfigureAwait(false);
+                        return (true, null, null);
+                    }
+
+                    if (chunkResponse.StatusCode == HttpStatusCode.OK)
+                    {
+                        // Server stopped honouring Range mid-transfer. Drop the partial
+                        // assembly and re-issue a fresh full GET.
+                        if (_verboseLogging)
+                        {
+                            Debug.LogWarning($"{nameof(ApiClient)}:{nameof(DownloadOneChunkAsync)} server returned 200 mid-transfer at offset {offset}; falling back to full GET.");
+                        }
+                        var fallback = await FallbackFullDownloadAsync(request, client, progressCallback, ct).ConfigureAwait(false);
+                        return (false, fallback, null);
+                    }
+
+                    // 4xx/5xx — return as the last-error response. Outer Polly may retry.
+                    var errorResponse = new HttpResponse<byte[]>(
+                        default,
+                        chunkResponse.Headers,
+                        chunkResponse.Content?.Headers,
+                        null,
+                        request.RequestMessage,
+                        chunkResponse.StatusCode);
+                    return (false, null, errorResponse);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Treat as transient if it wasn't user cancellation.
+                    if (attempt == attempts - 1) throw;
+                    await Task.Delay(BackoffForChunkAttempt(attempt), ct).ConfigureAwait(false);
+                }
+                catch (HttpRequestException)
+                {
+                    if (attempt == attempts - 1) throw;
+                    await Task.Delay(BackoffForChunkAttempt(attempt), ct).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    if (attempt == attempts - 1) throw;
+                    await Task.Delay(BackoffForChunkAttempt(attempt), ct).ConfigureAwait(false);
+                }
+            }
+
+            // Loop completed without success. Should not normally reach here because the
+            // last attempt rethrows; defensive return.
+            return (false, null, null);
+        }
+
+        private static TimeSpan BackoffForChunkAttempt(int attempt)
+        {
+            // 200ms, 400ms, 800ms, ... capped at 5s.
+            var ms = Math.Min(5000, 200 * (1 << attempt));
+            return TimeSpan.FromMilliseconds(ms);
+        }
+
+        private static HttpRequestMessage CloneRequestForRange(HttpRequestMessage src, long from, long to)
+        {
+            var clone = new HttpRequestMessage(src.Method, src.RequestUri)
+            {
+                Version = src.Version
+            };
+            foreach (var header in src.Headers)
+            {
+                if (string.Equals(header.Key, "Range", StringComparison.OrdinalIgnoreCase)) continue;
+                clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+            clone.Headers.Range = new RangeHeaderValue(from, to);
+            return clone;
+        }
+
+        private async Task<IHttpResponse> FallbackFullDownloadAsync(
+            HttpClientByteArrayRequest request,
+            HttpClient client,
+            Action<ByteArrayRequestProgress> progressCallback,
+            CancellationToken ct)
+        {
+            using var fullRequest = CloneRequestForFullGet(request.RequestMessage);
+            using var fullResponse = await client.SendAsync(
+                fullRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct).ConfigureAwait(false);
+
+            return await DrainResponseToByteArrayResponseAsync(
+                request,
+                fullResponse,
+                progressCallback,
+                gateBetweenReads: _rangeOpts.FallbackPreemptInBufferLoop,
+                ct).ConfigureAwait(false);
+        }
+
+        private static HttpRequestMessage CloneRequestForFullGet(HttpRequestMessage src)
+        {
+            var clone = new HttpRequestMessage(src.Method, src.RequestUri)
+            {
+                Version = src.Version
+            };
+            foreach (var header in src.Headers)
+            {
+                if (string.Equals(header.Key, "Range", StringComparison.OrdinalIgnoreCase)) continue;
+                clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+            return clone;
         }
 
         /// <summary>
@@ -1045,8 +1421,9 @@ namespace ApiClient.Runtime
 
             if (disposing)
             {
-                _httpClient.Dispose();
-                _streamHttpClient.Dispose();
+                _httpClient?.Dispose();
+                _streamHttpClient?.Dispose();
+                _assetHttpClient?.Dispose();
             }
 
             _disposed = true;

@@ -14,7 +14,16 @@ namespace ApiClient.Runtime
     public class ApiClientConnection : IApiClientConnection
     {
         private readonly IApiClient _apiClient;
+        private readonly IApiClient _assetApiClient;
         public IApiClient APIClient => _apiClient;
+
+        /// <summary>
+        /// Dedicated asset/stream <see cref="IApiClient"/> when the consumer is running the
+        /// two-instance topology (gameplay client + asset client sharing one
+        /// <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/>). Falls back
+        /// to <see cref="APIClient"/> when only one instance is configured.
+        /// </summary>
+        public IApiClient AssetAPIClient => _assetApiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
@@ -23,6 +32,25 @@ namespace ApiClient.Runtime
         public ApiClientConnection(ApiClientOptions apiClientOptions, IApiClient apiClient = null)
         {
             _apiClient = apiClient ?? new ApiClient(apiClientOptions);
+            _assetApiClient = _apiClient;
+            _httpVersion = apiClientOptions.Version;
+        }
+
+        /// <summary>
+        /// Two-instance constructor. Gameplay REST traffic routes through
+        /// <paramref name="gameplayApiClient"/>; byte-array (asset) and stream traffic routes
+        /// through <paramref name="assetApiClient"/>. Both should typically share one
+        /// <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/> via their
+        /// respective <see cref="ApiClientOptions"/> so gameplay activity throttles asset
+        /// transfers across the two instances.
+        /// </summary>
+        public ApiClientConnection(
+            ApiClientOptions apiClientOptions,
+            IApiClient gameplayApiClient,
+            IApiClient assetApiClient)
+        {
+            _apiClient = gameplayApiClient ?? throw new ArgumentNullException(nameof(gameplayApiClient));
+            _assetApiClient = assetApiClient ?? gameplayApiClient;
             _httpVersion = apiClientOptions.Version;
         }
 
@@ -475,7 +503,7 @@ namespace ApiClient.Runtime
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                _assetApiClient,
                 ct)
             {
                 Authentication = authentication,
@@ -499,7 +527,7 @@ namespace ApiClient.Runtime
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                _assetApiClient,
                 ct,
                 _urlCache,
                 cachePolicy,
