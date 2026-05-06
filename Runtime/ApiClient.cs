@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Stopwatch = System.Diagnostics.Stopwatch;
 using Newtonsoft.Json;
 using ApiClient.Runtime.Requests;
 using ApiClient.Runtime.HttpResponses;
@@ -28,6 +29,8 @@ namespace ApiClient.Runtime
         public long ResponseTotalUncompressedBytes => _responseTotalUncompressedBytes;
 
         public UrlCache Cache { get; } = new();
+
+        public event Action<RequestTimingSample> OnRequestCompleted;
 
         private readonly HttpClient _httpClient;
         private readonly HttpClient _streamHttpClient;
@@ -142,6 +145,55 @@ namespace ApiClient.Runtime
             return _priority.GetLaneConfig(req.PriorityLane).ChunkedRangeDownloads;
         }
 
+        // Emits one RequestTimingSample for a completed call. Tolerant of any null
+        // input — only the duration is required to be meaningful. Subscriber exceptions
+        // are swallowed so a buggy listener can't poison the send pipeline.
+        private void EmitTiming(
+            Stopwatch sw,
+            IHttpResponse response,
+            HttpMethod method,
+            string requestUri,
+            string priorityLane)
+        {
+            var handler = OnRequestCompleted;
+            if (handler == null) return;
+
+            sw.Stop();
+
+            // IsSuccess: bytes flowed end-to-end. Parsing errors count as success
+            // (network was healthy; only deserialisation failed). Aborts/timeouts/
+            // network errors carry meaningless durations and must NOT bias an EWMA.
+            var isSuccess =
+                response != null
+                && !response.IsAborted
+                && !response.IsTimeout
+                && !response.IsNetworkError;
+
+            var isFromCache = response is ICachedHttpResponse cached && cached.IsFromCache;
+
+            HttpStatusCode? statusCode = response is IHttpResponseStatusCode withStatus
+                ? withStatus.StatusCode
+                : (HttpStatusCode?)null;
+
+            var sample = new RequestTimingSample(
+                sw.Elapsed,
+                isSuccess,
+                isFromCache,
+                method,
+                requestUri,
+                statusCode,
+                priorityLane);
+
+            try
+            {
+                handler(sample);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+            }
+        }
+
         /// <summary>
         /// Make http request using HttpCLient with no body processing.
         /// </summary>
@@ -152,6 +204,16 @@ namespace ApiClient.Runtime
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest(HttpClientRequest req)
         {
+            // Snapshot identifying metadata BEFORE the send pipeline mutates / disposes
+            // req.RequestMessage during retries. Stopwatch captures total user-perceived
+            // call time (Task.Run schedule + middleware + Polly retry budget + sync ctx).
+            var __method = req?.RequestMessage?.Method;
+            var __uri = req?.RequestMessage?.RequestUri?.ToString();
+            var __lane = req?.PriorityLane;
+            var __sw = Stopwatch.StartNew();
+            IHttpResponse __final = null;
+            try
+            {
             var result = await Task.Run(async () =>
             {
                 using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
@@ -214,11 +276,17 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result);
+            __final = await ReturnOnSyncContext(result);
+            return __final;
+            }
+            finally
+            {
+                EmitTiming(__sw, __final, __method, __uri, __lane);
+            }
         }
 
         /// <summary>
-        /// Make http request using HttpCLient with a specified response type to which the 
+        /// Make http request using HttpCLient with a specified response type to which the
         /// response body will be deserialized. If deserialization is inpossible it will return
         /// <see cref="ParsingErrorHttpResponse"/>.
         /// </summary>
@@ -231,6 +299,13 @@ namespace ApiClient.Runtime
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<E>(HttpClientRequest<E> req)
         {
+            var __method = req?.RequestMessage?.Method;
+            var __uri = req?.RequestMessage?.RequestUri?.ToString();
+            var __lane = req?.PriorityLane;
+            var __sw = Stopwatch.StartNew();
+            IHttpResponse __final = null;
+            try
+            {
             var result = await Task.Run(async () =>
             {
                 using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
@@ -302,7 +377,13 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result);
+            __final = await ReturnOnSyncContext(result);
+            return __final;
+            }
+            finally
+            {
+                EmitTiming(__sw, __final, __method, __uri, __lane);
+            }
         }
 
         /// <summary>
@@ -318,6 +399,13 @@ namespace ApiClient.Runtime
         /// <see cref="NetworkErrorHttpResponse"/>.</returns>
         public async Task<IHttpResponse> SendHttpRequest<T, E>(HttpClientRequest<T, E> req)
         {
+            var __method = req?.RequestMessage?.Method;
+            var __uri = req?.RequestMessage?.RequestUri?.ToString();
+            var __lane = req?.PriorityLane;
+            var __sw = Stopwatch.StartNew();
+            IHttpResponse __final = null;
+            try
+            {
             var result = await Task.Run(async () =>
             {
                 using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
@@ -389,12 +477,25 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result);
+            __final = await ReturnOnSyncContext(result);
+            return __final;
+            }
+            finally
+            {
+                EmitTiming(__sw, __final, __method, __uri, __lane);
+            }
         }
 
 
         public async Task<IHttpResponse> SendHttpHeadersRequest(HttpClientHeadersRequest req)
         {
+            var __method = req?.RequestMessage?.Method;
+            var __uri = req?.RequestMessage?.RequestUri?.ToString();
+            var __lane = req?.PriorityLane;
+            var __sw = Stopwatch.StartNew();
+            IHttpResponse __final = null;
+            try
+            {
             var result = await Task.Run(async () =>
             {
                 using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
@@ -485,7 +586,13 @@ namespace ApiClient.Runtime
                 return await _middleware.ProcessResponse(response, req.RequestId, true);
             }, req.CancellationToken);
 
-            return await ReturnOnSyncContext(result);
+            __final = await ReturnOnSyncContext(result);
+            return __final;
+            }
+            finally
+            {
+                EmitTiming(__sw, __final, __method, __uri, __lane);
+            }
         }
 
         public async Task<IHttpResponse> SendByteArrayRequest(
@@ -1481,6 +1588,7 @@ namespace ApiClient.Runtime
             {
                 _httpClient?.Dispose();
                 _streamHttpClient?.Dispose();
+                OnRequestCompleted = null;
             }
 
             _disposed = true;
