@@ -31,7 +31,6 @@ namespace ApiClient.Runtime
 
         private readonly HttpClient _httpClient;
         private readonly HttpClient _streamHttpClient;
-        private readonly HttpClient _assetHttpClient;
         private readonly IApiClientMiddleware _middleware;
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
@@ -42,38 +41,27 @@ namespace ApiClient.Runtime
         private readonly AsyncPolicyWrap<IHttpResponse> _retryPolicies;
         private readonly RequestPriorityCoordinator _priority;
         private readonly RangeChunkedDownloadOptions _rangeOpts;
-        private readonly ApiClientLane _lane;
         private bool _disposed;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
         private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClientHandler _streamHttpClientHandler;
-        private readonly HttpClientHandler _assetHttpClientHandler;
 
         public ApiClient(ApiClientOptions options)
         {
             _priority = options.PriorityCoordinator;
             _rangeOpts = options.RangeDownload ?? new RangeChunkedDownloadOptions();
-            _lane = options.Lane;
 
-            // Gameplay client is skipped for asset-only instances.
-            if (_lane != ApiClientLane.Asset)
+            _httpClientHandler = new HttpClientHandler
             {
-                _httpClientHandler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-                _httpClient = new HttpClient(_httpClientHandler, disposeHandler: true)
-                {
-                    Timeout = options.Timeout
-                };
-            }
+                AutomaticDecompression = options.AutomaticDecompression
+            };
+            _httpClient = new HttpClient(_httpClientHandler, disposeHandler: true)
+            {
+                Timeout = options.Timeout
+            };
 
-            // Stream client is built for every lane: SSE rides the same priority bucket as
-            // assets (it's bandwidth-modest and shouldn't compete with gameplay), and an
-            // asset-only ApiClient must still be able to service a stream factory call from
-            // a connection wired in two-instance mode.
             _streamHttpClientHandler = new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.None
@@ -82,24 +70,6 @@ namespace ApiClient.Runtime
             {
                 Timeout = options.Timeout
             };
-
-            // Asset client: built when this instance services asset traffic AND a coordinator
-            // is present (Mixed) OR when the instance is dedicated to assets.
-            // Range downloads must run with AutomaticDecompression = None — Range over a
-            // gzip-compressed entity makes byte offsets undefined.
-            var needAssetClient = _lane == ApiClientLane.Asset
-                || (_lane == ApiClientLane.Mixed && _priority != null);
-            if (needAssetClient)
-            {
-                _assetHttpClientHandler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.None
-                };
-                _assetHttpClient = new HttpClient(_assetHttpClientHandler, disposeHandler: true)
-                {
-                    Timeout = options.Timeout
-                };
-            }
 
             // assign middleware
             _middleware = options.Middleware ?? new DefaultApiClientMiddleware();
@@ -122,18 +92,54 @@ namespace ApiClient.Runtime
             _streamReadDeltaUpdateTime = options.StreamReadDeltaUpdateTime;
         }
 
-        // Returns the HttpClient that should service byte-array (asset) downloads for this
-        // instance. Falls back to the gameplay client when no dedicated asset client was
-        // built (legacy behaviour or asset-disabled lane).
-        private HttpClient AssetClient => _assetHttpClient ?? _httpClient;
-
-        // Increments the gameplay-in-flight counter when the coordinator is configured AND
-        // this instance is not asset-only. The returned scope is allocation-free; default
-        // value is a no-op so the call site can use `using var` unconditionally.
-        private GameplayScope EnterGameplayIfApplicable()
+        // Acquire bulkhead slot, yield to higher-priority lanes, and register as in-flight
+        // on the request's lane. Disposing the returned handshake exits the lane (LIFO)
+        // and releases the slot. No-op when no coordinator is configured or the request
+        // carries no priority lane id.
+        private async Task<PriorityHandshake> BeginPriorityAsync(IHttpRequest req, CancellationToken ct)
         {
-            if (_priority == null || _lane == ApiClientLane.Asset) return default;
-            return _priority.EnterGameplay();
+            if (_priority == null || req.PriorityLane == null)
+                return default;
+
+            var slot = await _priority.AcquireSlotAsync(req.PriorityLane, ct).ConfigureAwait(false);
+            try
+            {
+                await _priority.WaitForYieldedLanesIdleAsync(req.PriorityLane, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                slot.Dispose();
+                throw;
+            }
+            var scope = _priority.EnterLane(req.PriorityLane);
+            return new PriorityHandshake(slot, scope);
+        }
+
+        // Allocation-light disposable bundling slot + lane scope. Default value is a no-op.
+        private readonly struct PriorityHandshake : IDisposable
+        {
+            private readonly IDisposable _slot;
+            private readonly LaneScope _scope;
+
+            public PriorityHandshake(IDisposable slot, LaneScope scope)
+            {
+                _slot = slot;
+                _scope = scope;
+            }
+
+            public void Dispose()
+            {
+                // LIFO: exit the lane first so anyone yielding to us can resume,
+                // then release the bulkhead slot.
+                _scope.Dispose();
+                _slot?.Dispose();
+            }
+        }
+
+        private bool ShouldUseChunkedRange(IHttpRequest req)
+        {
+            if (_priority == null || req.PriorityLane == null) return false;
+            return _priority.GetLaneConfig(req.PriorityLane).ChunkedRangeDownloads;
         }
 
         /// <summary>
@@ -148,7 +154,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                using var __gameplay = EnterGameplayIfApplicable();
+                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
 
                 await _middleware.ProcessRequest(req, true);
 
@@ -227,7 +233,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                using var __gameplay = EnterGameplayIfApplicable();
+                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
 
                 await _middleware.ProcessRequest(req, true);
 
@@ -314,7 +320,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                using var __gameplay = EnterGameplayIfApplicable();
+                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
 
                 await _middleware.ProcessRequest(req, true);
 
@@ -391,7 +397,7 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                using var __gameplay = EnterGameplayIfApplicable();
+                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
 
                 await _middleware.ProcessRequest(req, true);
 
@@ -488,11 +494,11 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
+                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
+
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
-
-                var contextHttpClient = AssetClient;
 
                 try
                 {
@@ -515,24 +521,16 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        IDisposable assetSlot = null;
                         try
                         {
-                            // Bulkhead acquire — only when coordinator is configured. The
-                            // legacy path keeps unbounded concurrency to preserve back-compat.
-                            if (_priority != null)
+                            if (ShouldUseChunkedRange(request))
                             {
-                                assetSlot = await _priority.AcquireAssetSlotAsync(request.CancellationToken).ConfigureAwait(false);
-                            }
-
-                            if (_priority != null && _rangeOpts.UseRangeRequests)
-                            {
-                                response = await ChunkedByteArrayDownloadAsync(request, progressCallback, AssetClient, request.CancellationToken).ConfigureAwait(false);
+                                response = await ChunkedByteArrayDownloadAsync(request, progressCallback, _httpClient, request.CancellationToken).ConfigureAwait(false);
                             }
                             else
                             {
-                                var gate = _priority != null && _rangeOpts.FallbackPreemptInBufferLoop;
-                                response = await LegacyByteArrayDownloadAsync(request, progressCallback, AssetClient, gate, request.CancellationToken).ConfigureAwait(false);
+                                var gate = _priority != null && request.PriorityLane != null && _rangeOpts.FallbackPreemptInBufferLoop;
+                                response = await LegacyByteArrayDownloadAsync(request, progressCallback, _httpClient, gate, request.CancellationToken).ConfigureAwait(false);
                             }
                         }
                         catch (OperationCanceledException)
@@ -547,13 +545,9 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
-                        finally
-                        {
-                            assetSlot?.Dispose();
-                        }
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
-                    }, new Dictionary<string, object>() { { HttpClientKey, contextHttpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
+                    }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
                 }
                 catch (OperationCanceledException)
                 {
@@ -634,9 +628,9 @@ namespace ApiClient.Runtime
             {
                 ct.ThrowIfCancellationRequested();
 
-                if (gateBetweenReads && _priority != null)
+                if (gateBetweenReads && _priority != null && request.PriorityLane != null)
                 {
-                    await _priority.WaitForGameplayIdleAsync(ct, _priority.Options.AssetFairnessMaxPause).ConfigureAwait(false);
+                    await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
                 }
 
                 var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
@@ -769,8 +763,8 @@ namespace ApiClient.Runtime
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Coarse-grained preemption: pause if any gameplay request is in flight.
-                await _priority.WaitForGameplayIdleAsync(ct, _priority.Options.AssetFairnessMaxPause).ConfigureAwait(false);
+                // Coarse-grained preemption: pause while any yielded-to lane is in flight.
+                await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
 
                 var chunkEnd = Math.Min(offset + chunkSize - 1, totalLength - 1);
 
@@ -1487,7 +1481,6 @@ namespace ApiClient.Runtime
             {
                 _httpClient?.Dispose();
                 _streamHttpClient?.Dispose();
-                _assetHttpClient?.Dispose();
             }
 
             _disposed = true;

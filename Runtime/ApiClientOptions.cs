@@ -57,30 +57,31 @@ namespace ApiClient.Runtime
         public bool BodyLogging { get; set; } = false;
 
         /// <summary>
-        /// Optional shared coordinator that gives gameplay HTTP traffic priority over
-        /// bulk asset downloads. When null (default) the legacy behaviour applies: a
-        /// single shared connection pool for every request, no concurrency cap on
-        /// asset downloads, no Range chunking. When non-null, an additional dedicated
-        /// asset <see cref="System.Net.Http.HttpClient"/> is built inside the
-        /// <see cref="ApiClient"/> and the byte-array path is dispatched through the
-        /// coordinator.
+        /// Optional shared priority coordinator. When null (default) the legacy
+        /// behaviour applies: requests run as before with no per-lane bulkhead, yield
+        /// gate, or chunked Range downloads. When non-null, requests carrying a
+        /// non-null <see cref="ApiClient.Runtime.Requests.IHttpRequest.PriorityLane"/>
+        /// are coordinated against the lanes registered on this coordinator.
         /// </summary>
         public RequestPriorityCoordinator PriorityCoordinator { get; set; } = null;
 
         /// <summary>
-        /// Configuration for the chunked HTTP Range asset download path. Only takes
-        /// effect when <see cref="PriorityCoordinator"/> is non-null.
+        /// Per-instance configuration of the chunked HTTP Range download path. Only
+        /// takes effect for byte-array requests on a lane whose
+        /// <see cref="LaneConfig.ChunkedRangeDownloads"/> is true.
         /// </summary>
         public RangeChunkedDownloadOptions RangeDownload { get; set; } = new RangeChunkedDownloadOptions();
 
         /// <summary>
-        /// Selects which transport pools this <see cref="ApiClient"/> instance owns.
-        /// Default <see cref="ApiClientLane.Mixed"/> keeps the historical behaviour of
-        /// one client owning every kind of traffic. Use
-        /// <see cref="ApiClientLane.Gameplay"/> / <see cref="ApiClientLane.Asset"/>
-        /// only when running two <see cref="ApiClient"/> instances side-by-side and
-        /// sharing one <see cref="PriorityCoordinator"/>.
+        /// Automatic decompression policy applied to the underlying
+        /// <see cref="System.Net.Http.HttpClientHandler"/>. Default
+        /// <see cref="DecompressionMethods.GZip"/> + <see cref="DecompressionMethods.Deflate"/>.
+        /// Set to <see cref="DecompressionMethods.None"/> when this <see cref="ApiClient"/>
+        /// services byte-array requests on a lane with
+        /// <see cref="LaneConfig.ChunkedRangeDownloads"/> enabled — Range over a gzipped
+        /// entity makes byte offsets undefined.
         /// </summary>
-        public ApiClientLane Lane { get; set; } = ApiClientLane.Mixed;
+        public DecompressionMethods AutomaticDecompression { get; set; } =
+            DecompressionMethods.GZip | DecompressionMethods.Deflate;
     }
 }

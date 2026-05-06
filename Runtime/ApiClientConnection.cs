@@ -9,48 +9,53 @@ using ApiClient.Runtime.Requests;
 namespace ApiClient.Runtime
 {
     /// <summary>
-    /// <see cref="ApiClientConnection"/> is responsible for preparing Requests
+    /// Builds <see cref="IHttpRequest"/> instances and routes them to the appropriate
+    /// <see cref="IApiClient"/>.
     /// </summary>
+    /// <remarks>
+    /// Single-client topology: pass one <see cref="IApiClient"/>; every request runs
+    /// through it.
+    ///
+    /// Multi-client topology: pass a default client plus a <c>laneRouting</c> map. Each
+    /// <c>Create*</c> call accepts an optional <c>priorityLane</c> id; when present and
+    /// the lane is keyed in <c>laneRouting</c>, the request is dispatched through the
+    /// mapped <see cref="IApiClient"/>. Otherwise it falls back to the default. The
+    /// chosen lane id is also stamped onto the request as
+    /// <see cref="IHttpRequest.PriorityLane"/> so the executor can coordinate with a
+    /// shared <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/>.
+    /// </remarks>
     public class ApiClientConnection : IApiClientConnection
     {
         private readonly IApiClient _apiClient;
-        private readonly IApiClient _assetApiClient;
-        public IApiClient APIClient => _apiClient;
+        private readonly IReadOnlyDictionary<string, IApiClient> _laneRouting;
 
-        /// <summary>
-        /// Dedicated asset/stream <see cref="IApiClient"/> when the consumer is running the
-        /// two-instance topology (gameplay client + asset client sharing one
-        /// <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/>). Falls back
-        /// to <see cref="APIClient"/> when only one instance is configured.
-        /// </summary>
-        public IApiClient AssetAPIClient => _assetApiClient;
+        public IApiClient APIClient => _apiClient;
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
         private readonly UrlCache _urlCache = new();
 
         public ApiClientConnection(ApiClientOptions apiClientOptions, IApiClient apiClient = null)
+            : this(apiClientOptions, apiClient ?? new ApiClient(apiClientOptions), laneRouting: null)
         {
-            _apiClient = apiClient ?? new ApiClient(apiClientOptions);
-            _assetApiClient = _apiClient;
-            _httpVersion = apiClientOptions.Version;
         }
 
         /// <summary>
-        /// Two-instance constructor. Gameplay REST traffic routes through
-        /// <paramref name="gameplayApiClient"/>; byte-array (asset) and stream traffic routes
-        /// through <paramref name="assetApiClient"/>. Both should typically share one
-        /// <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/> via their
-        /// respective <see cref="ApiClientOptions"/> so gameplay activity throttles asset
-        /// transfers across the two instances.
+        /// Build a connection that dispatches per-request based on
+        /// <paramref name="laneRouting"/>. When a request supplies a <c>priorityLane</c>
+        /// keyed in the map, that lane's <see cref="IApiClient"/> services the request;
+        /// otherwise <paramref name="defaultApiClient"/> handles it. The same coordinator
+        /// reference is typically shared by every <see cref="IApiClient"/> via
+        /// <see cref="ApiClientOptions.PriorityCoordinator"/>.
         /// </summary>
         public ApiClientConnection(
             ApiClientOptions apiClientOptions,
-            IApiClient gameplayApiClient,
-            IApiClient assetApiClient)
+            IApiClient defaultApiClient,
+            IReadOnlyDictionary<string, IApiClient> laneRouting)
         {
-            _apiClient = gameplayApiClient ?? throw new ArgumentNullException(nameof(gameplayApiClient));
-            _assetApiClient = assetApiClient ?? gameplayApiClient;
+            if (apiClientOptions == null) throw new ArgumentNullException(nameof(apiClientOptions));
+            _apiClient = defaultApiClient ?? throw new ArgumentNullException(nameof(defaultApiClient));
+            _laneRouting = laneRouting;
             _httpVersion = apiClientOptions.Version;
         }
 
@@ -70,38 +75,47 @@ namespace ApiClient.Runtime
             _defaultHeaders.Remove(key.Trim());
         }
 
+        // Pick the IApiClient for a request based on its priority lane. Lanes not in the
+        // routing map (or null lane) fall back to the default client.
+        private IApiClient Route(string priorityLane)
+        {
+            if (priorityLane != null && _laneRouting != null && _laneRouting.TryGetValue(priorityLane, out var routed))
+                return routed;
+            return _apiClient;
+        }
+
         public HttpClientRequest CreateGet(
             string url,
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            CachePolicy cachePolicy = null)
+            CachePolicy cachePolicy = null,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreateGet(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
-            foreach (var header in headers)
+            if (headers != null)
             {
-                request.RequestMessage.Headers.Add(header.Key, header.Value);
+                foreach (var header in headers)
+                {
+                    request.RequestMessage.Headers.Add(header.Key, header.Value);
+                }
             }
 
             return request;
@@ -113,27 +127,24 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            CachePolicy cachePolicy = null)
+            CachePolicy cachePolicy = null,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet<E>(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreateGet<E>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -145,28 +156,24 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            CachePolicy cachePolicy = null)
+            CachePolicy cachePolicy = null,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet<T, E>(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders
-                ))
+                () => this.CreateGet<T, E>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -178,28 +185,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreatePost(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -215,28 +218,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost<T>(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreatePost<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -252,28 +251,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost<T, E>(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreatePost<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -289,28 +284,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Put, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreatePut(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -326,28 +317,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut<T>(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders))
+                () => this.CreatePut<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -363,29 +350,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Put, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut<T, E>(
-                    url,
-                    jsonBody,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders
-                ))
+                () => this.CreatePut<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             if (jsonBody != null)
@@ -400,28 +382,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Delete, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders
-                ))
+                () => this.CreateDelete(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -432,28 +410,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete<T>(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders
-                ))
+                () => this.CreateDelete<T>(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -464,28 +438,24 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete<T, E>(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders
-                ))
+                () => this.CreateDelete<T, E>(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -496,19 +466,21 @@ namespace ApiClient.Runtime
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
-            bool useDefaultHeaders = true)
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
                 },
-                _assetApiClient,
+                Route(priorityLane),
                 ct)
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -520,28 +492,24 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            CachePolicy cachePolicy = null)
+            CachePolicy cachePolicy = null,
+            string priorityLane = null)
         {
             var request = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
                 },
-                _assetApiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGetByteArrayRequest(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders,
-                    cachePolicy))
+                () => this.CreateGetByteArrayRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;
@@ -553,28 +521,24 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            CachePolicy cachePolicy = null)
+            CachePolicy cachePolicy = null,
+            string priorityLane = null)
         {
             var request = new HttpClientHeadersRequest(
                 new HttpRequestMessage(HttpMethod.Head, url)
                 {
                     Version = _httpVersion
                 },
-                _apiClient,
+                Route(priorityLane),
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGetHeadersOnlyRequest(
-                    url,
-                    ct,
-                    authentication,
-                    headers,
-                    useDefaultHeaders,
-                    cachePolicy))
+                () => this.CreateGetHeadersOnlyRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
-                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
             };
 
             return request;

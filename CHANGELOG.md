@@ -3,14 +3,16 @@ All notable changes to this project will be documented in this file.
 
 ## [1.4.0]
 ### Add
-- Gameplay vs asset priority lane. New `RequestPriorityCoordinator` (in `ApiClient.Runtime.Priority`) gives gameplay HTTP traffic priority over bulk byte-array (asset) downloads on bandwidth-constrained networks (notably 3G).
-- New `ApiClientOptions.PriorityCoordinator`, `ApiClientOptions.RangeDownload` and `ApiClientOptions.Lane` options. Default off — `PriorityCoordinator = null` keeps the legacy single-pool behaviour and is fully back-compat.
-- When the coordinator is configured, `SendByteArrayRequest` runs through a dedicated `_assetHttpClient` (separate connection pool, `AutomaticDecompression = None`) and uses HTTP `Range` chunked downloads. Asset workers gate between chunks on `WaitForGameplayIdleAsync` so a long asset transfer pauses while gameplay requests are in flight.
-- Per-chunk retry inside the chunked path so a transient packet loss mid-transfer doesn't throw away the bytes already received. Outer Polly retry still applies on exhaustion.
-- Graceful fallback: if the server returns `200` to the Range probe (Range not honoured) or returns `200` mid-transfer, the download falls back to a single-GET drain (with optional gate-between-buffer-reads).
-- `ApiClientConnection` two-instance constructor: separate gameplay and asset `IApiClient` instances sharing one `RequestPriorityCoordinator`.
-- `ApiClientLane` enum (`Mixed | Gameplay | Asset`) for advanced topologies.
-- `PriorityCoordinatorTests` covering coordinator semantics, fairness ceiling and bulkhead.
+- Domain-neutral priority lanes. New `RequestPriorityCoordinator` (in `ApiClient.Runtime.Priority`) lets the caller define lanes (caller-named string ids) with per-lane concurrency caps, yield-to-other-lanes relationships, fairness ceilings, and an opt-in chunked-Range download path. The library coordinates without assuming any meaning for lane labels — gameplay/asset/telemetry/etc. are entirely a caller convention.
+- `LaneConfig` describes one lane: `Id`, `MaxConcurrent`, `YieldsTo`, `FairnessMaxPause`, `ChunkedRangeDownloads`. Coordinator validates duplicates, unknown `YieldsTo` targets, and cycles at construction time.
+- `ApiClientOptions.PriorityCoordinator` (default `null`) opts in. `ApiClientOptions.RangeDownload` configures the chunked path. New `ApiClientOptions.AutomaticDecompression` exposes the underlying handler's decompression policy (set to `None` on instances that service `ChunkedRangeDownloads = true` lanes — Range over a gzipped entity is undefined).
+- Per-request priority tagging: every `IApiClientConnection.Create*` method gains an optional `string priorityLane = null` parameter. The id is stamped onto the request as `IHttpRequest.PriorityLane`; when non-null the executor acquires a slot, awaits yielded-to lanes idle, and registers the request as in-flight on its lane.
+- `ApiClientConnection` accepts an optional `IReadOnlyDictionary<string, IApiClient> laneRouting` map. When the request's lane is keyed in the map, the request is dispatched through the mapped client; otherwise it falls back to the default. Pool isolation across lanes becomes a caller concern (compose with multiple `ApiClient` instances sharing one coordinator).
+- Chunked HTTP `Range` download path with per-chunk retries, mid-transfer fallback to a full GET when the server stops honouring `Range`, and gate-between-chunks preemption so a higher-priority lane becoming busy yields radio bandwidth back. Synthesises a final `200 OK` with assembled `Content-Length` so the URL cache stores responses normally.
+- `PriorityCoordinatorTests` covering construction validation, multi-lane chains, bulkhead, fairness ceiling, cancellation, and disposal semantics.
+
+### Removed
+- The earlier (unreleased) policy-leaky API: `ApiClientLane` enum, `RequestPriorityCoordinator.EnterGameplay`/`GameplayScope`/`GameplayInFlight`, `AcquireAssetSlotAsync`, `_assetHttpClient`, `ApiClientConnection.AssetAPIClient` and the two-instance gameplay/asset constructor, `PriorityCoordinatorOptions`, and the `RangeChunkedDownloadOptions.UseRangeRequests` flag.
 
 ## [1.3.4]
 - When valid SSE message is received, the IApiClientMiddleware.ProcessResponse will not be invoked
