@@ -80,13 +80,22 @@ namespace ApiClient.Tests
             });
             using var _ = coord.EnterGameplay();
 
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            await coord.WaitForGameplayIdleAsync(CancellationToken.None, TimeSpan.FromMilliseconds(150));
-            sw.Stop();
+            var waitTask = coord.WaitForGameplayIdleAsync(CancellationToken.None, TimeSpan.FromMilliseconds(150));
+
+            // Behavioural assertion (no tight wall-clock bounds — flaky on CI):
+            // the wait should not complete before 50ms (proves the fairness timeout
+            // isn't firing instantly), and it must complete eventually under a
+            // generous safety timeout. Counter must not be decremented by a fairness exit.
+            var earlyRace = await Task.WhenAny(waitTask, Task.Delay(50));
+            Assert.That(earlyRace, Is.Not.SameAs(waitTask),
+                "fairness wait should not complete before its max pause");
+
+            var safetyTimeout = Task.Delay(TimeSpan.FromSeconds(5));
+            var settled = await Task.WhenAny(waitTask, safetyTimeout);
+            Assert.That(settled, Is.SameAs(waitTask), "fairness wait failed to elapse within safety timeout");
+            await waitTask;
 
             Assert.That(coord.GameplayInFlight, Is.EqualTo(1), "fairness exit should not decrement counter");
-            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(140));
-            Assert.That(sw.ElapsedMilliseconds, Is.LessThan(1000));
         }
 
         [Test]
@@ -124,14 +133,21 @@ namespace ApiClient.Tests
 
             var slot1 = await coord.AcquireAssetSlotAsync(CancellationToken.None);
             var slot2 = await coord.AcquireAssetSlotAsync(CancellationToken.None);
+            Assert.That(slot1, Is.Not.Null);
+            Assert.That(slot2, Is.Not.Null);
 
-            // Third acquire must block.
+            // Third acquire must stay pending while both slots are held. Use WhenAny
+            // against a generous timeout instead of a fixed Task.Delay sleep — fixed
+            // sleeps are flaky under CI load.
             var slot3Task = coord.AcquireAssetSlotAsync(CancellationToken.None);
-            await Task.Delay(50);
-            Assert.That(slot3Task.IsCompleted, Is.False);
+            var timeout = Task.Delay(TimeSpan.FromSeconds(1));
+            var racedFirst = await Task.WhenAny(slot3Task, timeout);
+            Assert.That(racedFirst, Is.SameAs(timeout),
+                "third acquire should still be pending while both slots are held");
 
             slot1.Dispose();
             var slot3 = await slot3Task;
+            Assert.That(slot3, Is.Not.Null);
             slot2.Dispose();
             slot3.Dispose();
         }

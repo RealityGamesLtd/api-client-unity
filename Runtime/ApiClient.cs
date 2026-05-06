@@ -57,8 +57,7 @@ namespace ApiClient.Runtime
             _rangeOpts = options.RangeDownload ?? new RangeChunkedDownloadOptions();
             _lane = options.Lane;
 
-            // Always-on handlers + clients depending on lane.
-            // Asset-only instances skip the gameplay/stream pools entirely.
+            // Gameplay client is skipped for asset-only instances.
             if (_lane != ApiClientLane.Asset)
             {
                 _httpClientHandler = new HttpClientHandler
@@ -69,16 +68,20 @@ namespace ApiClient.Runtime
                 {
                     Timeout = options.Timeout
                 };
-
-                _streamHttpClientHandler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.None
-                };
-                _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
-                {
-                    Timeout = options.Timeout
-                };
             }
+
+            // Stream client is built for every lane: SSE rides the same priority bucket as
+            // assets (it's bandwidth-modest and shouldn't compete with gameplay), and an
+            // asset-only ApiClient must still be able to service a stream factory call from
+            // a connection wired in two-instance mode.
+            _streamHttpClientHandler = new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.None
+            };
+            _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
+            {
+                Timeout = options.Timeout
+            };
 
             // Asset client: built when this instance services asset traffic AND a coordinator
             // is present (Mixed) OR when the instance is dedicated to assets.
@@ -794,15 +797,43 @@ namespace ApiClient.Runtime
             var responseBytes = memoryStream.ToArray();
             UpdateResponseMetrics(responseBytes.Length, totalLength);
 
+            // The probe's Content-Range / chunk Content-Length describe the first chunk
+            // only — they would lie about the assembled body if cached. Build a fresh
+            // header set with the right Content-Length and Range-specific entries removed.
+            var assembledContentHeaders = BuildAssembledContentHeaders(probeResponse.Content?.Headers, totalLength);
+
             // Synthesize a 200 OK so URL cache stores the assembled response normally and
             // downstream consumers never see 206.
             return new HttpResponse<byte[]>(
                 responseBytes,
                 probeResponse.Headers,
-                probeResponse.Content?.Headers,
+                assembledContentHeaders,
                 null,
                 request.RequestMessage,
                 HttpStatusCode.OK);
+        }
+
+        private static HttpContentHeaders BuildAssembledContentHeaders(HttpContentHeaders source, long totalLength)
+        {
+            if (source == null) return null;
+
+            // ByteArrayContent gives us a writable HttpContentHeaders without allocating
+            // a real body buffer.
+            var carrier = new ByteArrayContent(Array.Empty<byte>());
+            var headers = carrier.Headers;
+
+            foreach (var header in source)
+            {
+                if (string.Equals(header.Key, "Content-Range", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(header.Key, "Content-Length", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            headers.ContentLength = totalLength;
+            return headers;
         }
 
         /// <summary>
@@ -842,9 +873,42 @@ namespace ApiClient.Runtime
 
                     if (chunkResponse.StatusCode == HttpStatusCode.PartialContent)
                     {
-                        await using var chunkStream = await chunkResponse.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                        await chunkStream.CopyToAsync(memoryStream, _byteArrayBufferSize, ct).ConfigureAwait(false);
-                        return (true, null, null);
+                        // Validate Content-Range. A misbehaving server that returns the
+                        // wrong window or a truncated body would otherwise silently
+                        // corrupt the assembled payload.
+                        var expectedLength = chunkEnd - offset + 1;
+                        var contentRange = chunkResponse.Content?.Headers?.ContentRange;
+                        if (contentRange == null
+                            || !contentRange.HasRange
+                            || contentRange.Unit != "bytes"
+                            || contentRange.From != offset
+                            || contentRange.To != chunkEnd)
+                        {
+                            throw new IOException(
+                                $"Invalid Content-Range for chunk {offset}-{chunkEnd}: '{contentRange}'.");
+                        }
+
+                        var startLength = memoryStream.Length;
+                        try
+                        {
+                            await using var chunkStream = await chunkResponse.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                            await chunkStream.CopyToAsync(memoryStream, _byteArrayBufferSize, ct).ConfigureAwait(false);
+
+                            var appended = memoryStream.Length - startLength;
+                            if (appended != expectedLength)
+                            {
+                                throw new IOException(
+                                    $"Chunk {offset}-{chunkEnd} returned {appended} bytes, expected {expectedLength}.");
+                            }
+                            return (true, null, null);
+                        }
+                        catch
+                        {
+                            // Roll back partial writes so the per-chunk retry sees a clean stream.
+                            memoryStream.SetLength(startLength);
+                            memoryStream.Position = startLength;
+                            throw;
+                        }
                     }
 
                     if (chunkResponse.StatusCode == HttpStatusCode.OK)

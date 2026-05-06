@@ -5,21 +5,23 @@ using System.Threading.Tasks;
 namespace ApiClient.Runtime.Priority
 {
     /// <summary>
-    /// Coordinates priority between gameplay HTTP traffic and bulk asset downloads.
-    /// One instance is intended to be shared across every <see cref="ApiClient"/> in the
-    /// process so that gameplay activity in one instance throttles asset transfers in
-    /// another. Inject via <see cref="ApiClientOptions.PriorityCoordinator"/>.
+    /// Process-wide priority coordinator: tracks gameplay HTTP traffic in flight, gates
+    /// asset workers on it, and bulkheads concurrent asset transfers. Inject one shared
+    /// instance into every <see cref="ApiClientOptions.PriorityCoordinator"/> so gameplay
+    /// activity in one <see cref="ApiClient"/> throttles asset transfers in another.
     /// </summary>
     /// <remarks>
-    /// Gameplay tracking: <see cref="EnterGameplay"/> returns a struct disposable that
-    /// increments an internal counter. When the counter is non-zero, asset workers gating
-    /// on <see cref="WaitForGameplayIdleAsync"/> stay paused.
-    ///
-    /// Asset bulkhead: <see cref="AcquireAssetSlotAsync"/> uses a <see cref="SemaphoreSlim"/>
-    /// to cap concurrent asset transfers regardless of the gameplay counter.
-    ///
-    /// Fairness: <see cref="WaitForGameplayIdleAsync"/> accepts a max-pause timeout so
-    /// asset workers cannot starve indefinitely under sustained gameplay traffic.
+    /// Three responsibilities:
+    /// <list type="bullet">
+    /// <item>Counter — <see cref="EnterGameplay"/> increments on entry, decrements on
+    /// dispose. Counter is gameplay-only by design (excludes byte-array assets and SSE
+    /// streams), so asset workers see a true idle signal.</item>
+    /// <item>Idle gate — <see cref="WaitForGameplayIdleAsync"/> awaits a transition to
+    /// counter == 0, with an optional fairness ceiling so assets never starve.</item>
+    /// <item>Asset bulkhead — <see cref="AcquireAssetSlotAsync"/> caps concurrent asset
+    /// transfers via a <see cref="SemaphoreSlim"/>. The bulkhead is asset-scoped (hence
+    /// the naming) and does not gate gameplay calls.</item>
+    /// </list>
     /// </remarks>
     public sealed class RequestPriorityCoordinator : IDisposable
     {
@@ -27,7 +29,7 @@ namespace ApiClient.Runtime.Priority
         private readonly SemaphoreSlim _assetSemaphore;
         private readonly object _gate = new();
         private TaskCompletionSource<bool> _idleTcs;
-        private long _gameplayCount;
+        private int _gameplayCount;
         private int _disposed;
 
         public RequestPriorityCoordinator(PriorityCoordinatorOptions options = null)
@@ -41,25 +43,31 @@ namespace ApiClient.Runtime.Priority
         public PriorityCoordinatorOptions Options => _options;
 
         /// <summary>
-        /// Number of gameplay requests currently in flight. Read-only snapshot.
+        /// Number of gameplay requests currently in flight. Excludes asset and stream
+        /// traffic. Read-only snapshot.
         /// </summary>
-        public long GameplayInFlight => Interlocked.Read(ref _gameplayCount);
+        public int GameplayInFlight => Volatile.Read(ref _gameplayCount);
 
         /// <summary>
         /// Increment the gameplay-in-flight counter. Dispose the returned scope to
-        /// decrement. The struct is allocation-free; default(GameplayScope) is a no-op
-        /// so callers can write <c>using var s = coord?.EnterGameplay() ?? default;</c>.
+        /// decrement. The struct is allocation-free; <c>default(GameplayScope)</c> is a
+        /// no-op so callers can write
+        /// <c>using var s = coord?.EnterGameplay() ?? default;</c>.
         /// </summary>
         public GameplayScope EnterGameplay()
         {
+            ThrowIfDisposed();
             if (!_options.Enabled) return default;
 
+            // Lock guards counter+TCS swap atomically. Without it: thread A decrements
+            // 1->0 and reads _idleTcs to complete it; thread B enters, sees count==1
+            // again and swaps a fresh TCS into _idleTcs; A then completes the now-stale
+            // TCS instead of leaving the new one pending. Race.
             lock (_gate)
             {
                 _gameplayCount++;
                 if (_gameplayCount == 1)
                 {
-                    // transition idle -> busy: install fresh non-completed TCS
                     _idleTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
@@ -83,12 +91,13 @@ namespace ApiClient.Runtime.Priority
 
         /// <summary>
         /// Returns a task that completes when no gameplay request is in flight, or when
-        /// <paramref name="maxWait"/> elapses (fairness ceiling so assets never starve),
+        /// <paramref name="maxWait"/> elapses (fairness ceiling — assets never starve),
         /// or when <paramref name="ct"/> is cancelled (in which case the task is cancelled).
         /// Fast-path: returns <see cref="Task.CompletedTask"/> immediately when idle.
         /// </summary>
         public async Task WaitForGameplayIdleAsync(CancellationToken ct, TimeSpan? maxWait = null)
         {
+            ThrowIfDisposed();
             if (!_options.Enabled) return;
 
             TaskCompletionSource<bool> idleTcs;
@@ -100,31 +109,16 @@ namespace ApiClient.Runtime.Priority
 
             ct.ThrowIfCancellationRequested();
 
-            var idleTask = idleTcs.Task;
+            // Race idle vs (timeout OR cancellation). Task.Delay handles both: a non-null
+            // maxWait makes the delay the fairness exit; an Infinite delay only completes
+            // when ct cancels. Either way, ct cancellation surfaces via the post-await
+            // ThrowIfCancellationRequested.
+            var delay = maxWait.HasValue
+                ? Task.Delay(maxWait.Value, ct)
+                : Task.Delay(Timeout.Infinite, ct);
 
-            if (maxWait.HasValue)
-            {
-                // Race idle vs timeout vs cancellation. Timeout is non-throwing (fairness exit).
-                var delayTask = Task.Delay(maxWait.Value, ct);
-                await Task.WhenAny(idleTask, delayTask).ConfigureAwait(false);
-                ct.ThrowIfCancellationRequested();
-            }
-            else
-            {
-                // Race idle vs cancellation only.
-                if (!ct.CanBeCanceled)
-                {
-                    await idleTask.ConfigureAwait(false);
-                    return;
-                }
-
-                var cancelTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                using (ct.Register(s => ((TaskCompletionSource<bool>)s).TrySetCanceled(), cancelTcs))
-                {
-                    await Task.WhenAny(idleTask, cancelTcs.Task).ConfigureAwait(false);
-                }
-                ct.ThrowIfCancellationRequested();
-            }
+            await Task.WhenAny(idleTcs.Task, delay).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
         }
 
         /// <summary>
@@ -133,7 +127,9 @@ namespace ApiClient.Runtime.Priority
         /// </summary>
         public async Task<IDisposable> AcquireAssetSlotAsync(CancellationToken ct)
         {
+            ThrowIfDisposed();
             if (!_options.Enabled) return NoopDisposable.Instance;
+
             await _assetSemaphore.WaitAsync(ct).ConfigureAwait(false);
             return new SemaphoreReleaser(_assetSemaphore);
         }
@@ -141,7 +137,26 @@ namespace ApiClient.Runtime.Priority
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+            // Cancel the idle TCS so any pending WaitForGameplayIdleAsync callers stop
+            // hanging at shutdown. WhenAny against a canceled task returns instantly;
+            // the post-await ThrowIfCancellationRequested only fires if the caller's own
+            // CT was canceled, so a clean dispose lets waiters return normally.
+            TaskCompletionSource<bool> waiters;
+            lock (_gate)
+            {
+                waiters = _idleTcs;
+                _idleTcs = CompletedTcs();
+            }
+            waiters?.TrySetResult(true);
+
             _assetSemaphore.Dispose();
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                throw new ObjectDisposedException(nameof(RequestPriorityCoordinator));
         }
 
         private static TaskCompletionSource<bool> CompletedTcs()
