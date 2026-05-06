@@ -93,6 +93,8 @@ namespace ApiClient.Runtime
             CachePolicy cachePolicy = null,
             string priorityLane = null)
         {
+            // Headers are applied once via the request's Headers setter; the duplicate
+            // foreach that lived here previously caused header values to be added twice.
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
@@ -109,14 +111,6 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
             };
-
-            if (headers != null)
-            {
-                foreach (var header in headers)
-                {
-                    request.RequestMessage.Headers.Add(header.Key, header.Value);
-                }
-            }
 
             return request;
         }
@@ -461,6 +455,14 @@ namespace ApiClient.Runtime
             return request;
         }
 
+        /// <summary>
+        /// Creates a long-lived Server-Sent Events stream request. <paramref name="priorityLane"/>
+        /// is used for <see cref="IApiClient"/> routing (via the connection's lane map) and
+        /// stamped on the request for observability — it does NOT participate in
+        /// <see cref="ApiClient.Runtime.Priority.RequestPriorityCoordinator"/> bulkhead /
+        /// yield / in-flight handshakes. Stream lifetimes are open-ended; holding a slot
+        /// or in-flight count for the stream's duration would deadlock other lanes.
+        /// </summary>
         public HttpClientStreamRequest<T> CreateGetStreamRequest<T>(
             string url,
             CancellationToken ct,

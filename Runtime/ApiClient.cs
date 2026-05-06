@@ -838,13 +838,21 @@ namespace ApiClient.Runtime
                     ct).ConfigureAwait(false);
             }
 
-            var totalLength = probeResponse.Content.Headers.ContentRange?.Length ?? -1L;
-            if (totalLength < 0)
+            // Validate the probe's Content-Range. A server returning a shifted unit, a
+            // non-zero From, or a body length that disagrees with To-From+1 would silently
+            // corrupt the assembled buffer. Per-chunk validation in DownloadOneChunkAsync
+            // covers later chunks; the probe needs the same treatment.
+            var probeRange = probeResponse.Content.Headers.ContentRange;
+            if (probeRange == null
+                || !probeRange.HasRange
+                || probeRange.Unit != "bytes"
+                || probeRange.From != 0
+                || probeRange.To == null
+                || probeRange.Length == null)
             {
-                // 206 without parseable Content-Range total. Drain what we have and exit.
                 if (_verboseLogging)
                 {
-                    Debug.LogWarning($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} 206 without Content-Range length, falling back to single drain.");
+                    Debug.LogWarning($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} 206 with malformed Content-Range '{probeRange}', falling back to single drain.");
                 }
                 return await DrainResponseToByteArrayResponseAsync(
                     request,
@@ -854,6 +862,8 @@ namespace ApiClient.Runtime
                     ct).ConfigureAwait(false);
             }
 
+            var totalLength = probeRange.Length.Value;
+
             using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, int.MaxValue));
 
             // 1. Drain first chunk into the assembly buffer.
@@ -862,6 +872,17 @@ namespace ApiClient.Runtime
                 await firstChunkStream.CopyToAsync(memoryStream, _byteArrayBufferSize, ct).ConfigureAwait(false);
             }
             var offset = memoryStream.Length;
+
+            // The probe body's actual byte count must match (To - From + 1). A short read
+            // (truncated stream / premature EOF) is an integrity failure on this attempt;
+            // throw so the outer Polly wrap can retry the whole transfer.
+            var expectedProbeBytes = probeRange.To.Value - probeRange.From.Value + 1;
+            if (offset != expectedProbeBytes)
+            {
+                throw new IOException(
+                    $"Probe body length {offset} bytes does not match Content-Range '{probeRange}' (expected {expectedProbeBytes}).");
+            }
+
             progressCallback?.PostOnMainThread(new ByteArrayRequestProgress(offset, totalLength), _syncCtx);
 
             // 2. Loop remaining chunks. Each chunk is a fresh HttpRequestMessage cloned from
