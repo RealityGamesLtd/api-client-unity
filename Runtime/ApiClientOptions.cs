@@ -1,6 +1,7 @@
 using System;
 using Polly.Retry;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Priority;
 using System.Net;
 using Polly.Wrap;
 
@@ -48,11 +49,39 @@ namespace ApiClient.Runtime
         public int StreamReadDeltaUpdateTime { get; set; } = 1000;
 
         public bool VerboseLogging { get; set; } = false;
-        
+
         /// <summary>
         /// Enable gathering body for logging purposes.
         /// </summary>
         /// <value></value>
         public bool BodyLogging { get; set; } = false;
+
+        /// <summary>
+        /// Optional shared priority coordinator. When null (default) the legacy
+        /// behaviour applies: requests run as before with no per-lane bulkhead, yield
+        /// gate, or chunked Range downloads. When non-null, requests carrying a
+        /// non-null <see cref="ApiClient.Runtime.Requests.IHttpRequest.PriorityLane"/>
+        /// are coordinated against the lanes registered on this coordinator.
+        /// </summary>
+        public RequestPriorityCoordinator PriorityCoordinator { get; set; } = null;
+
+        /// <summary>
+        /// Per-instance configuration of the chunked HTTP Range download path. Only
+        /// takes effect for byte-array requests on a lane whose
+        /// <see cref="LaneConfig.ChunkedRangeDownloads"/> is true.
+        /// </summary>
+        public RangeChunkedDownloadOptions RangeDownload { get; set; } = new RangeChunkedDownloadOptions();
+
+        /// <summary>
+        /// Automatic decompression policy applied to the underlying
+        /// <see cref="System.Net.Http.HttpClientHandler"/>. Default
+        /// <see cref="DecompressionMethods.GZip"/> + <see cref="DecompressionMethods.Deflate"/>.
+        /// Set to <see cref="DecompressionMethods.None"/> when this <see cref="ApiClient"/>
+        /// services byte-array requests on a lane with
+        /// <see cref="LaneConfig.ChunkedRangeDownloads"/> enabled — Range over a gzipped
+        /// entity makes byte offsets undefined.
+        /// </summary>
+        public DecompressionMethods AutomaticDecompression { get; set; } =
+            DecompressionMethods.GZip | DecompressionMethods.Deflate;
     }
 }

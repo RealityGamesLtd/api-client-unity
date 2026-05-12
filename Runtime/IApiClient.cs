@@ -38,6 +38,21 @@ namespace ApiClient.Runtime
 
         UrlCache Cache { get; }
 
+        /// <summary>
+        /// Fires once per completed <see cref="SendHttpRequest(HttpClientRequest)"/>,
+        /// <see cref="SendHttpRequest{E}(HttpClientRequest{E})"/>,
+        /// <see cref="SendHttpRequest{T, E}(HttpClientRequest{T, E})"/> and
+        /// <see cref="SendHttpHeadersRequest"/> call. Provides per-call timing so
+        /// consumers can drive a connection-quality classifier (EWMA, etc.).
+        ///
+        /// Byte-array and stream sends are intentionally NOT instrumented: their
+        /// durations are bandwidth-/lifetime-bound and would corrupt an RTT signal.
+        ///
+        /// Subscribers receive the event from whatever thread completed the request.
+        /// Marshal to the main thread yourself if needed.
+        /// </summary>
+        event Action<RequestTimingSample> OnRequestCompleted;
+
         Task<IHttpResponse> SendHttpRequest(HttpClientRequest req);
         Task<IHttpResponse> SendHttpRequest<E>(HttpClientRequest<E> req);
         Task<IHttpResponse> SendHttpRequest<T, E>(HttpClientRequest<T, E> req);

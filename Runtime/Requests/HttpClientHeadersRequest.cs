@@ -16,6 +16,7 @@ namespace ApiClient.Runtime.Requests
         public CancellationToken CancellationToken { get; }
         public HttpRequestMessage RequestMessage { get; }
         public string RequestId { get; private set; } = Guid.NewGuid().ToString();
+        public string PriorityLane { get; internal set; }
         public Uri Uri { get; private set; }
 
         public AuthenticationHeaderValue Authentication

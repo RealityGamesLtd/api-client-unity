@@ -21,6 +21,10 @@ namespace ApiClient.Runtime
 
         public UrlCache Cache { get; } = new UrlCache();
 
+        // Mock never fires timing samples; use no-op accessors so subscribers are silently
+        // discarded and the compiler doesn't warn about an unused event field.
+        public event Action<RequestTimingSample> OnRequestCompleted { add { } remove { } }
+
         public Task<IHttpResponse> SendHttpRequest(HttpClientRequest req)
         {
             if (SendHttpRequestFunc != null)
