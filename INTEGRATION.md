@@ -52,7 +52,7 @@ var coord = new RequestPriorityCoordinator(new[]
     new LaneConfig(ApiLane.Telemetry) { MaxConcurrent = 2, YieldsTo = new[] { ApiLane.Gameplay, ApiLane.Ui, ApiLane.Asset } },
 });
 
-var apiClient = new ApiClient(new ApiClientOptions
+var options = new ApiClientOptions
 {
     Timeout = TimeSpan.FromSeconds(15),
     PriorityCoordinator = coord,
@@ -62,8 +62,9 @@ var apiClient = new ApiClient(new ApiClientOptions
     // dealbreaker. Use Topology B if you want gameplay calls compressed AND chunked
     // Range downloads on assets.
     AutomaticDecompression = DecompressionMethods.None,
-});
+};
 
+var apiClient = new ApiClient(options);
 var conn = new ApiClientConnection(options, apiClient);
 ```
 
@@ -79,13 +80,14 @@ var coord = new RequestPriorityCoordinator(new[]
     new LaneConfig(ApiLane.Asset) { MaxConcurrent = 1, YieldsTo = new[] { ApiLane.Gameplay, ApiLane.Ui }, ChunkedRangeDownloads = true },
 });
 
-var gameplayClient = new ApiClient(new ApiClientOptions
+var gameplayOptions = new ApiClientOptions
 {
     Timeout = TimeSpan.FromSeconds(10),
     PriorityCoordinator = coord,
     RetryPolicies = BuildRetryPolicy(),
     AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,  // gzip on
-});
+};
+var gameplayClient = new ApiClient(gameplayOptions);
 
 var assetClient = new ApiClient(new ApiClientOptions
 {
@@ -100,8 +102,10 @@ var assetClient = new ApiClient(new ApiClientOptions
     },
 });
 
+// Connection is built with the gameplay client as the default; asset lane is routed
+// to the dedicated asset client so it gets its own connection pool.
 var conn = new ApiClientConnection(
-    options,
+    gameplayOptions,
     defaultApiClient: gameplayClient,
     laneRouting: new Dictionary<string, IApiClient>
     {
@@ -198,11 +202,43 @@ Don't dispose the coordinator while requests are in flight — pending `AcquireS
 - **`ChunkedRangeDownloads = true` requires the underlying handler's `AutomaticDecompression = None`** on whatever `IApiClient` services that lane. Range over a gzipped entity has undefined byte offsets. Topology B handles this by giving the asset lane its own `ApiClient`.
 - **Outer Polly retry on byte-array path** should be ≤1 when chunked — chunked retries per chunk internally; outer retry restarts the whole transfer from byte 0.
 - **Stringly-typed lane ids.** Always use the `ApiLane` constants. Coordinator throws `KeyNotFoundException` on unknown id at request time.
-- **SSE streams** routed via the same coordinator. If you don't want SSE to count toward gameplay-tier in-flight, give it its own lane (e.g. `"stream"`) and don't include it in any other lane's `YieldsTo`.
+- **SSE streams** are **not coordinated**. `priorityLane` on `CreateGetStreamRequest` is **routing-only** — it picks which `IApiClient` services the stream (via the `laneRouting` map) and stamps the request for observability, but `SendStreamRequest` never acquires a bulkhead slot, registers as in-flight, or yields. Stream lifetimes are open-ended; holding a slot or in-flight count for the stream's duration would deadlock other lanes.
 - **`PriorityCoordinator` shutdown order:** dispose coordinator AFTER all `ApiClient`s.
 - **Cancellation:** `priorityLane`-tagged calls hold their bulkhead slot for the full retry duration. A long-blocked retry pile-up can starve a low-`MaxConcurrent` lane until the calling `CancellationToken` fires.
 
-## 9. Verify on device
+## 9. Connection-quality signal (optional)
+
+`IApiClient.OnRequestCompleted` fires once per `SendHttp*` / `SendHttpHeadersRequest` call with a `RequestTimingSample`. Feed the duration into an EWMA on the consumer side to detect bandwidth-throttled networks where SSE heartbeats stay healthy but full REST calls stretch.
+
+```csharp
+private Action<RequestTimingSample> _rttSink;
+
+void Subscribe(IApiClient client)
+{
+    _rttSink = sample =>
+    {
+        // Skip aborts/timeouts/network errors (durations are meaningless) and
+        // cache hits (return near-instantly, would drag the EWMA low).
+        if (!sample.IsSuccess || sample.IsFromCache) return;
+
+        // Optional: only feed the indicator from the gameplay lane.
+        if (sample.PriorityLane != ApiLane.Gameplay) return;
+
+        ConnectionQuality.OnRestRttSample(sample.Duration);
+    };
+    client.OnRequestCompleted += _rttSink;
+}
+
+void Unsubscribe(IApiClient client) => client.OnRequestCompleted -= _rttSink;
+```
+
+Notes:
+- `Duration` is **user-perceived call time** — includes Polly retry backoff, middleware, and the sync-context post. Not pure network RTT, but it IS what the player feels.
+- Subscribers receive the event from whatever thread completed the request — typically Unity's main thread (sync context post), but on exception paths from a worker. Marshal yourself if your handler does Unity API calls.
+- Byte-array and stream sends do NOT emit. Bandwidth-bound durations would skew the signal.
+- In a multi-client topology (post priority-lane refactor), subscribe to **each** `IApiClient` you care about — typically only the gameplay one.
+
+## 10. Verify on device
 
 1. Throttle with iOS Network Link Conditioner to "3G" (DL 780kbps / UL 330kbps / 100ms RTT).
 2. Trigger a heavy asset download (e.g. 10–50 MB blob via `priorityLane: "asset"`).

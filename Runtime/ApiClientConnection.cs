@@ -115,7 +115,7 @@ namespace ApiClient.Runtime
             return request;
         }
 
-        public HttpClientRequest<E> CreateGet<E>(
+        public HttpClientRequest<T> CreateGet<T>(
             string url,
             CancellationToken ct,
             AuthenticationHeaderValue authentication = null,
@@ -124,7 +124,7 @@ namespace ApiClient.Runtime
             CachePolicy cachePolicy = null,
             string priorityLane = null)
         {
-            var request = new HttpClientRequest<E>(
+            var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Get, url)
                 {
                     Version = _httpVersion
@@ -133,7 +133,7 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet<E>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGet<T>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
             {
                 Authentication = authentication,
                 Headers = headers,
