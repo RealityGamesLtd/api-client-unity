@@ -216,8 +216,6 @@ namespace ApiClient.Runtime
             {
             var result = await Task.Run(async () =>
             {
-                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
-
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -226,6 +224,8 @@ namespace ApiClient.Runtime
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
+                        using var __pri = await BeginPriorityAsync(req, ct).ConfigureAwait(false);
+
                         response = null;
 
                         HttpClientRequest request;
@@ -308,8 +308,6 @@ namespace ApiClient.Runtime
             {
             var result = await Task.Run(async () =>
             {
-                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
-
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -318,6 +316,8 @@ namespace ApiClient.Runtime
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
+                        using var __pri = await BeginPriorityAsync(req, ct).ConfigureAwait(false);
+
                         response = null;
 
                         HttpClientRequest<E> request;
@@ -408,8 +408,6 @@ namespace ApiClient.Runtime
             {
             var result = await Task.Run(async () =>
             {
-                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
-
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -418,6 +416,8 @@ namespace ApiClient.Runtime
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
+                        using var __pri = await BeginPriorityAsync(req, ct).ConfigureAwait(false);
+
                         response = null;
 
                         HttpClientRequest<T, E> request;
@@ -498,8 +498,6 @@ namespace ApiClient.Runtime
             {
             var result = await Task.Run(async () =>
             {
-                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
-
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -508,6 +506,8 @@ namespace ApiClient.Runtime
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
+                        using var __pri = await BeginPriorityAsync(req, ct).ConfigureAwait(false);
+
                         response = null;
 
                         HttpClientHeadersRequest request;
@@ -601,8 +601,6 @@ namespace ApiClient.Runtime
         {
             var result = await Task.Run(async () =>
             {
-                using var __pri = await BeginPriorityAsync(req, req.CancellationToken).ConfigureAwait(false);
-
                 await _middleware.ProcessRequest(req, true);
 
                 IHttpResponse response = null;
@@ -611,6 +609,8 @@ namespace ApiClient.Runtime
                 {
                     await _retryPolicies.ExecuteAsync(async (context, ct) =>
                     {
+                        using var __pri = await BeginPriorityAsync(req, ct).ConfigureAwait(false);
+
                         response = null;
 
                         HttpClientByteArrayRequest request;
