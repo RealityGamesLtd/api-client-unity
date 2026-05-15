@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.4.1]
 ### Improvement
 - Priority bulkhead slot and lane scope are now acquired per Polly retry attempt and released between attempts. Previously the handshake was held across the entire retry chain, so backoff sleeps on transient infra codes (408/500/502/504) and 401 retries kept the bulkhead slot occupied and the lane marked in-flight while no HTTP I/O was running — stalling cross-lane traffic and any same-lane queued requests. Chunked Range downloads still hold the slot continuously across all chunks within one attempt; release only happens between attempts. Note: a request that retries must re-queue on its lane's bulkhead per attempt (FIFO-ish), so fresh requests on the same lane can interleave between retries.
 - New `PriorityRetryInteractionTests` fixture exercises the per-attempt handshake via a localhost `HttpListener`: slot released during backoff, slot held across Range chunks within an attempt, no slot leak on cancellation mid-backoff, and Polly context flow (auth-header swap) unaffected by the move.
