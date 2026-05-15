@@ -36,10 +36,32 @@ namespace ApiClient.Tests
         [SetUp]
         public void SetUp()
         {
-            _port = GetFreeTcpPort();
-            _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
-            _listener.Start();
+            // Retry the listener bind: GetFreeTcpPort releases its probe socket before
+            // HttpListener.Start runs, opening a TOCTOU window where a parallel test or
+            // another process can claim the port. Retry on bind failure with a fresh port.
+            HttpListenerException lastBindFailure = null;
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var candidate = GetFreeTcpPort();
+                var listener = new HttpListener();
+                listener.Prefixes.Add($"http://127.0.0.1:{candidate}/");
+                try
+                {
+                    listener.Start();
+                    _port = candidate;
+                    _listener = listener;
+                    lastBindFailure = null;
+                    break;
+                }
+                catch (HttpListenerException ex)
+                {
+                    lastBindFailure = ex;
+                    try { listener.Close(); } catch { }
+                }
+            }
+            if (_listener == null)
+                throw new InvalidOperationException("Failed to bind HttpListener after retries.", lastBindFailure);
+
             _acceptCts = new CancellationTokenSource();
             _acceptLoop = Task.Run(AcceptLoopAsync);
         }
@@ -63,9 +85,21 @@ namespace ApiClient.Tests
         [Test]
         public async Task SlotReleasedDuringBackoff_AllowsCrossLaneProgress()
         {
+            // Two-lane setup: "low" yields to "high". While "high" is in-flight the
+            // coordinator parks any "low" request on WaitForYieldedLanesIdleAsync.
+            // Post-refactor A's lane scope is released between Polly attempts, so B
+            // (on "low") observes "high" as idle during backoff and proceeds.
+            // Pre-refactor A holds the scope across the entire retry chain, so B
+            // either waits for A to finish or until FairnessMaxPause elapses.
             using var coord = new RequestPriorityCoordinator(new[]
             {
-                new LaneConfig("a") { MaxConcurrent = 1, FairnessMaxPause = TimeSpan.FromSeconds(1) }
+                new LaneConfig("high") { MaxConcurrent = 1, FairnessMaxPause = TimeSpan.FromSeconds(8) },
+                new LaneConfig("low")
+                {
+                    MaxConcurrent = 1,
+                    YieldsTo = new[] { "high" },
+                    FairnessMaxPause = TimeSpan.FromSeconds(8),
+                },
             });
 
             var options = BuildOptions(coord, transientBackoff: TimeSpan.FromMilliseconds(500), transientRetries: 1);
@@ -100,17 +134,18 @@ namespace ApiClient.Tests
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-            // Fire A first. A will: attempt 1 → 502, backoff ~500ms, attempt 2 → 200.
-            var reqA = conn.CreateGet($"http://127.0.0.1:{_port}/a", cts.Token, priorityLane: "a");
+            // Fire A on "high". A will: attempt 1 → 502, backoff ~500ms, attempt 2 → 200.
+            var reqA = conn.CreateGet($"http://127.0.0.1:{_port}/a", cts.Token, priorityLane: "high");
             var aTask = reqA.Send();
 
             // Wait until A's first attempt has hit the server (so we know A is in backoff).
             await aFirstRequestReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            // Fire B during A's backoff. Pre-refactor B would wait for A's entire retry
-            // chain (~500ms + RTT). Post-refactor B should grab the slot during backoff.
+            // Fire B on "low". B must yield to "high"; pre-refactor it would wait for
+            // A's full retry chain. Post-refactor "high" goes idle during backoff so B
+            // resumes promptly.
             var bSw = Stopwatch.StartNew();
-            var reqB = conn.CreateGet($"http://127.0.0.1:{_port}/b", cts.Token, priorityLane: "a");
+            var reqB = conn.CreateGet($"http://127.0.0.1:{_port}/b", cts.Token, priorityLane: "low");
             var bResp = await reqB.Send();
             bSw.Stop();
 
@@ -120,12 +155,13 @@ namespace ApiClient.Tests
             Assert.That((bResp as IHttpResponseStatusCode)?.StatusCode, Is.EqualTo(HttpStatusCode.OK), "B should succeed");
             Assert.That((aResp as IHttpResponseStatusCode)?.StatusCode, Is.EqualTo(HttpStatusCode.OK), "A should succeed after retry");
 
-            // Slot-released-during-backoff guarantee: B completes well within the 500ms
-            // backoff window. Generous bound to absorb scheduling jitter.
+            // Cross-lane-progress guarantee: B completes well within the 500ms backoff
+            // window. Generous bound to absorb scheduling jitter and HttpListener RTT.
             Assert.That(bSw.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(400)),
-                $"B took {bSw.ElapsedMilliseconds}ms — slot was not released during A's backoff.");
+                $"B took {bSw.ElapsedMilliseconds}ms — \"high\" lane scope was not released during A's backoff.");
 
-            Assert.That(coord.InFlight("a"), Is.EqualTo(0), "no slot leak after both complete");
+            Assert.That(coord.InFlight("high"), Is.EqualTo(0), "no slot leak on high lane");
+            Assert.That(coord.InFlight("low"), Is.EqualTo(0), "no slot leak on low lane");
         }
 
         // ──────────────────── 2. Slot held across chunked Range download ─────────
@@ -162,13 +198,20 @@ namespace ApiClient.Tests
             };
 
             var samples = new ConcurrentQueue<int>();
-            var stopWatcher = false;
+            using var watcherCts = new CancellationTokenSource();
             var watcher = Task.Run(async () =>
             {
-                while (!stopWatcher)
+                while (!watcherCts.IsCancellationRequested)
                 {
                     samples.Enqueue(coord.InFlight("asset"));
-                    await Task.Delay(5);
+                    try
+                    {
+                        await Task.Delay(5, watcherCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             });
 
@@ -176,7 +219,7 @@ namespace ApiClient.Tests
             var req = conn.CreateGetByteArrayRequest($"http://127.0.0.1:{_port}/asset", cts.Token, priorityLane: "asset");
             var resp = await req.Send(null);
 
-            stopWatcher = true;
+            watcherCts.Cancel();
             await watcher;
 
             Assert.That(resp, Is.Not.Null);
