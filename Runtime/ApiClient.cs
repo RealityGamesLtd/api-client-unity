@@ -21,14 +21,16 @@ using ApiClient.Runtime.Auxiliary;
 
 namespace ApiClient.Runtime
 {
-    public class ApiClient : IApiClient
+    public class ApiClient : IApiClient, IHttpCacheBridge
     {
         private long _responseTotalCompressedBytes;
         private long _responseTotalUncompressedBytes;
         public long ResponseTotalCompressedBytes => _responseTotalCompressedBytes;
         public long ResponseTotalUncompressedBytes => _responseTotalUncompressedBytes;
 
-        public UrlCache Cache { get; } = new();
+        public UrlCache Cache { get; }
+
+        public IHttpCacheBridge CacheBridge => this;
 
         public event Action<RequestTimingSample> OnRequestCompleted;
 
@@ -56,6 +58,12 @@ namespace ApiClient.Runtime
         {
             _priority = options.PriorityCoordinator;
             _rangeOpts = options.RangeDownload ?? new RangeChunkedDownloadOptions();
+
+            Cache = options.UrlCache ?? new UrlCache();
+            if (options.DiskCacheStore != null)
+            {
+                Cache.AttachDiskCache(options.DiskCacheStore, this);
+            }
 
             _httpClientHandler = new HttpClientHandler
             {
@@ -1623,6 +1631,152 @@ namespace ApiClient.Runtime
             }
 
             return (error, body, errorResponse);
+        }
+
+        // ─── IHttpCacheBridge ────────────────────────────────────────────────
+        //
+        // Reconstructs a typed IHttpResponse from cached body bytes + saved metadata.
+        // The disk cache stores the raw JSON body (UTF-8) and the original ETag /
+        // Last-Modified / Content-Type. On a 304 hit, UrlCache calls one of these
+        // methods to produce an HttpResponse<T,E> / HttpResponse<E> equivalent to
+        // what a fresh 200 would have produced — same deserialiser, same metrics,
+        // same headers shape.
+
+        async Task<IHttpResponse> IHttpCacheBridge.RehydrateAsync<T, E>(
+            HttpClientRequest<T, E> req, DiskCacheEntry meta, Stream body)
+        {
+            var bodyBytes = await ReadAllBytesAsync(body).ConfigureAwait(false);
+            using var msg = BuildRehydrationResponseMessage(req.RequestMessage, meta, bodyBytes);
+
+            T content = default;
+            string bodyText = string.Empty;
+            try
+            {
+                using var ms = new MemoryStream(bodyBytes);
+                content = DeserializeJson<T>(ms, msg.Content.Headers, "Api Client Rehydrate [T,E]", out var bytesRead);
+                UpdateResponseMetrics(bytesRead, bodyBytes.LongLength);
+                bodyText = await ReadBodyForLoggingAsync(ms, msg.Content.Headers);
+            }
+            catch (Exception ex)
+            {
+                return new ParsingErrorHttpResponse(
+                    ex.ToString(),
+                    msg.Headers,
+                    msg.Content.Headers,
+                    bodyText,
+                    req.RequestMessage.RequestUri,
+                    HttpStatusCode.OK);
+            }
+
+            return new HttpResponse<T, E>(
+                content,
+                default,
+                msg.Headers,
+                msg.Content.Headers,
+                bodyText,
+                req.RequestMessage,
+                HttpStatusCode.OK);
+        }
+
+        async Task<IHttpResponse> IHttpCacheBridge.RehydrateAsync<E>(
+            HttpClientRequest<E> req, DiskCacheEntry meta, Stream body)
+        {
+            var bodyBytes = await ReadAllBytesAsync(body).ConfigureAwait(false);
+            using var msg = BuildRehydrationResponseMessage(req.RequestMessage, meta, bodyBytes);
+
+            E content = default;
+            string bodyText = string.Empty;
+            try
+            {
+                using var ms = new MemoryStream(bodyBytes);
+                content = DeserializeJson<E>(ms, msg.Content.Headers, "Api Client Rehydrate [E]", out var bytesRead);
+                UpdateResponseMetrics(bytesRead, bodyBytes.LongLength);
+                bodyText = await ReadBodyForLoggingAsync(ms, msg.Content.Headers);
+            }
+            catch (Exception ex)
+            {
+                return new ParsingErrorHttpResponse(
+                    ex.ToString(),
+                    msg.Headers,
+                    msg.Content.Headers,
+                    bodyText,
+                    req.RequestMessage.RequestUri,
+                    HttpStatusCode.OK);
+            }
+
+            return new HttpResponse<E>(
+                content,
+                msg.Headers,
+                msg.Content.Headers,
+                bodyText,
+                req.RequestMessage,
+                HttpStatusCode.OK);
+        }
+
+        Task<IHttpResponse> IHttpCacheBridge.RehydrateAsync(
+            HttpClientRequest req, DiskCacheEntry meta, Stream body)
+        {
+            // Plain HttpResponse has no body field — nothing to rehydrate beyond
+            // headers + status. Synthesize a 200 response with the cached headers.
+            using var msg = BuildRehydrationResponseMessage(req.RequestMessage, meta, Array.Empty<byte>());
+            IHttpResponse result = new HttpResponse(
+                req.RequestMessage,
+                msg.Headers,
+                msg.Content.Headers,
+                HttpStatusCode.OK);
+            return Task.FromResult(result);
+        }
+
+        private static async Task<byte[]> ReadAllBytesAsync(Stream body)
+        {
+            if (body is MemoryStream ms) return ms.ToArray();
+            using var copy = new MemoryStream();
+            await body.CopyToAsync(copy).ConfigureAwait(false);
+            return copy.ToArray();
+        }
+
+        // Stitches a synthetic HttpResponseMessage so the live deserialiser path
+        // sees the cached bytes + Content-Type exactly as if they came from the wire.
+        // ByteArrayContent's default media type is application/octet-stream, which
+        // would short-circuit ProcessJsonResponse; we override with the cached
+        // Content-Type (typically application/json).
+        private static HttpResponseMessage BuildRehydrationResponseMessage(
+            HttpRequestMessage requestMessage, DiskCacheEntry meta, byte[] bodyBytes)
+        {
+            var msg = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(bodyBytes ?? Array.Empty<byte>()),
+                RequestMessage = requestMessage,
+            };
+
+            if (!string.IsNullOrEmpty(meta?.ContentType))
+            {
+                var mediaType = meta.ContentType;
+                var semi = mediaType.IndexOf(';');
+                if (semi > 0) mediaType = mediaType.Substring(0, semi).Trim();
+                try
+                {
+                    msg.Content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+                }
+                catch
+                {
+                    msg.Content.Headers.TryAddWithoutValidation("Content-Type", meta.ContentType);
+                }
+            }
+
+            if (meta?.SelectedHeaders != null)
+            {
+                foreach (var kv in meta.SelectedHeaders)
+                {
+                    if (string.Equals(kv.Key, "Content-Type", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!msg.Headers.TryAddWithoutValidation(kv.Key, kv.Value))
+                    {
+                        msg.Content.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                    }
+                }
+            }
+
+            return msg;
         }
 
         public void Dispose()

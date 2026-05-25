@@ -1,5 +1,6 @@
 using System;
 using Polly.Retry;
+using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.HttpResponses;
 using ApiClient.Runtime.Priority;
 using System.Net;
@@ -9,6 +10,24 @@ namespace ApiClient.Runtime
 {
     public class ApiClientOptions
     {
+        /// <summary>
+        /// Optional pre-built <see cref="UrlCache"/> to share across multiple
+        /// <see cref="ApiClient"/> instances (e.g. gameplay + asset clients backed
+        /// by a single disk cache). When null, the <see cref="ApiClient"/> creates
+        /// its own. Either way, <see cref="DiskCacheStore"/> (if non-null) is
+        /// attached to whatever <see cref="UrlCache"/> ends up on the client.
+        /// </summary>
+        public UrlCache UrlCache { get; set; }
+
+        /// <summary>
+        /// Optional disk-backed HTTP cache. When set, every request issued through
+        /// this <see cref="ApiClient"/> whose <c>cachePolicy</c> is a
+        /// <see cref="HttpCachePolicy"/> participates in ETag / Last-Modified
+        /// conditional GETs and persistent storage. Wire one shared store across
+        /// all client instances in the connection so they don't fight over files.
+        /// </summary>
+        public IHttpDiskCacheStore DiskCacheStore { get; set; }
+
         /// <summary>
         /// Set how long to wait for the response until it's terminated.
         /// </summary>

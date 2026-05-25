@@ -70,6 +70,7 @@ namespace ApiClient.Runtime.HttpResponses
         public string Body { get; private set; }
 
         bool ICachedHttpResponse.IsFromCache { get; set; }
+        bool ICachedHttpResponse.IsConditionalHit { get; set; }
 
         public long CacheContentSize()
         {

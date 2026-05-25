@@ -68,12 +68,13 @@ namespace ApiClient.Runtime.HttpResponses
         public string Body { get; private set; }
 
         bool ICachedHttpResponse.IsFromCache { get; set; }
+        bool ICachedHttpResponse.IsConditionalHit { get; set; }
 
         public long CacheContentSize()
         {
             // assume the content will have the same size as body.
             // this doesn't have to be the exact value
-            return Body != null ? Body.Length * sizeof(char) * 2 : 1; 
+            return Body != null ? Body.Length * sizeof(char) * 2 : 1;
         }
     }
 }

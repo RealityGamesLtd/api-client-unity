@@ -33,7 +33,7 @@ namespace ApiClient.Runtime
 
         private readonly Dictionary<string, string> _defaultHeaders = new();
         private readonly Version _httpVersion;
-        private readonly UrlCache _urlCache = new();
+        private readonly UrlCache _urlCache;
 
         public ApiClientConnection(ApiClientOptions apiClientOptions, IApiClient apiClient = null)
             : this(apiClientOptions, apiClient ?? new ApiClient(apiClientOptions), laneRouting: null)
@@ -57,6 +57,10 @@ namespace ApiClient.Runtime
             _apiClient = defaultApiClient ?? throw new ArgumentNullException(nameof(defaultApiClient));
             _laneRouting = laneRouting;
             _httpVersion = apiClientOptions.Version;
+            // Share the default client's UrlCache so a disk store attached via
+            // ApiClientOptions.DiskCacheStore is visible to every request issued
+            // through this connection, regardless of which lane it routes to.
+            _urlCache = _apiClient.Cache ?? apiClientOptions.UrlCache ?? new UrlCache();
         }
 
         public void SetDefaultHeader(string key, string value)

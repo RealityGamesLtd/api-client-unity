@@ -21,6 +21,10 @@ namespace ApiClient.Runtime
 
         public UrlCache Cache { get; } = new UrlCache();
 
+        // Mock never attaches a disk cache, so the bridge is never invoked through
+        // UrlCache.Process. Leaving null avoids dragging in real deserialisation.
+        public IHttpCacheBridge CacheBridge => null;
+
         // Mock never fires timing samples; use no-op accessors so subscribers are silently
         // discarded and the compiler doesn't warn about an unused event field.
         public event Action<RequestTimingSample> OnRequestCompleted { add { } remove { } }

@@ -39,6 +39,13 @@ namespace ApiClient.Runtime
         UrlCache Cache { get; }
 
         /// <summary>
+        /// Bridge used by <see cref="UrlCache"/> to rebuild typed responses from
+        /// disk-cached bytes on a 304 Not Modified hit. Implemented by the concrete
+        /// <see cref="ApiClient"/> so the deserialiser pipeline is reused unchanged.
+        /// </summary>
+        IHttpCacheBridge CacheBridge { get; }
+
+        /// <summary>
         /// Fires once per completed <see cref="SendHttpRequest(HttpClientRequest)"/>,
         /// <see cref="SendHttpRequest{E}(HttpClientRequest{E})"/>,
         /// <see cref="SendHttpRequest{T, E}(HttpClientRequest{T, E})"/> and

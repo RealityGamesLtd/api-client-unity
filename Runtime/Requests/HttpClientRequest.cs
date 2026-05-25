@@ -118,7 +118,8 @@ namespace ApiClient.Runtime.Requests
             var response = await _urlCache.Process(
                 this,
                 _cachePolicy,
-                () => _apiClient.SendHttpRequest(this));
+                () => _apiClient.SendHttpRequest(this),
+                (meta, body) => _apiClient.CacheBridge.RehydrateAsync(this, meta, body));
 
             return response;
         }

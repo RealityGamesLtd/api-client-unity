@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.1.0]
+### Add
+- HTTP disk cache backed by ETag / Last-Modified conditional requests (RFC 7232). New `Cache/IHttpDiskCacheStore`, default `FileSystemHttpDiskCacheStore` (atomic .tmp+rename writes, per-key `SemaphoreSlim`, LRU eviction at a configurable byte cap). Opt-in per request via the new `HttpCachePolicy : CachePolicy` (`UseConditionalRequests`, `PersistToDisk`, `VaryKey`). When a disk store is attached to `UrlCache` and the caller supplies a `HttpCachePolicy`, eligible GETs receive cached `If-None-Match` / `If-Modified-Since` headers; on a 304 the body is hydrated from disk and returned to the caller as a typed `HttpResponse<T,E>` indistinguishable from a fresh 200. Designed for drastic cold-start speed-up: configs / translations / static board snapshots become a single 304 round-trip plus a local disk read.
+- New `IHttpCacheBridge` (implemented by `ApiClient`) so `UrlCache` can rebuild typed responses on a 304 hit without depending on the JSON / HttpClient internals — the same `DeserializeJson<T>` pipeline runs against the cached bytes.
+- New `ICachedHttpResponse.IsConditionalHit` distinguishes a disk-validated 304 hit from an in-memory cache hit (telemetry-friendly).
+- `ApiClientOptions.DiskCacheStore` + `ApiClientOptions.UrlCache` let the consumer share a single store + cache instance across multiple `ApiClient` instances (e.g. gameplay + asset).
+- `ApiClientConnection` now reuses the default client's `UrlCache` instead of constructing a separate one, so disk attachment is visible to every request flowing through the connection regardless of which lane handles it.
+
+### Notes
+- Phase 1 covers JSON GETs via `HttpClientRequest<T,E>` and `HttpClientRequest<E>` only. Byte-array Range downloads and mutating verbs intentionally bypass the conditional path.
+- Existing in-memory `UrlCache` behaviour is unchanged for callers that pass a plain `CachePolicy`.
+
 ## [2.0.0]
 ### Breaking
 - **Library no longer forces caller continuations onto the Unity main thread.** `ReturnOnSyncContext` (the per-response `SynchronizationContext.Post` hop) and the `_syncCtx` field were removed. Continuations now resume on whatever thread the caller's `await` captures — exactly the standard .NET async/await contract. Code that awaits a send from a `MonoBehaviour` method (already on main) keeps working unchanged. Code that awaits from a pool/background context and then touches Unity objects must dispatch to main explicitly.
