@@ -16,45 +16,6 @@ namespace ApiClient.Tests
     public class ExtensionsTests
     {
         [Test]
-        public void PostOnMainThread_InvokesCalled_WhenContextProvided()
-        {
-            // Arrange
-            var syncContext = new TestSynchronizationContext();
-            var callbackInvoked = false;
-            var expectedValue = 42;
-            var actualValue = 0;
-
-            Action<int> callback = (value) =>
-            {
-                callbackInvoked = true;
-                actualValue = value;
-            };
-
-            // Act
-            callback.PostOnMainThread(expectedValue, syncContext);
-            syncContext.ExecutePendingCallbacks();
-
-            // Assert
-            Assert.IsTrue(callbackInvoked, "Callback should have been invoked");
-            Assert.AreEqual(expectedValue, actualValue, "Value should match");
-        }
-
-        [Test]
-        public void PostOnMainThread_NullCallback_DoesNotThrow()
-        {
-            // Arrange
-            var syncContext = new TestSynchronizationContext();
-            Action<int> callback = null;
-
-            // Act & Assert
-            Assert.DoesNotThrow(() =>
-            {
-                callback.PostOnMainThread(42, syncContext);
-                syncContext.ExecutePendingCallbacks();
-            });
-        }
-
-        [Test]
         public void GetHeader_SingleValue_ReturnsTrue()
         {
             // Arrange
@@ -238,24 +199,5 @@ namespace ApiClient.Tests
             Assert.That(errorMessage, Does.Contain("Could not load image"));
         }
 
-        // Helper class for testing SynchronizationContext
-        private class TestSynchronizationContext : SynchronizationContext
-        {
-            private readonly Queue<(SendOrPostCallback callback, object state)> _callbacks = new();
-
-            public override void Post(SendOrPostCallback d, object state)
-            {
-                _callbacks.Enqueue((d, state));
-            }
-
-            public void ExecutePendingCallbacks()
-            {
-                while (_callbacks.Count > 0)
-                {
-                    var (callback, state) = _callbacks.Dequeue();
-                    callback?.Invoke(state);
-                }
-            }
-        }
     }
 }

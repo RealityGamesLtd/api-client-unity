@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
-using System.Threading;
 using ApiClient.Runtime.HttpResponses;
 using UnityEngine;
 
@@ -10,11 +9,6 @@ namespace ApiClient.Runtime.Auxiliary
 {
     public static class Extensions
     {
-        public static void PostOnMainThread<T>(this Action<T> callback, T value, SynchronizationContext context)
-        {
-            context.Post((o) => callback?.Invoke(value), null);
-        }
-
         /// <summary>
         /// Convert byte[] <see cref="HttpResponse"/> to Sprite Image
         /// </summary>

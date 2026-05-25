@@ -31,9 +31,25 @@ namespace ApiClient.Runtime
         public int StreamBufferSize { get; set; } = 4096;
 
         /// <summary>
-        /// Buffer size for byte array requests in bytes. Default = 4096 bytes
+        /// Buffer size for byte array requests in bytes. Default = 65536 bytes (64 KB).
+        /// Larger buffers cut the number of <c>ReadAsync</c> iterations per response,
+        /// which directly reduces progress-callback churn and allocation rate on mobile.
         /// </summary>
-        public int ByteArrayBufferSize { get; set; } = 4096;
+        public int ByteArrayBufferSize { get; set; } = 65536;
+
+        /// <summary>
+        /// Minimum bytes between byte-array progress callbacks. Default = 65536 bytes (64 KB).
+        /// Callback fires when either this OR <see cref="ProgressReportThrottleMs"/>
+        /// threshold is crossed. First and final progress callbacks always fire.
+        /// </summary>
+        public int ProgressReportThresholdBytes { get; set; } = 64 * 1024;
+
+        /// <summary>
+        /// Minimum milliseconds between byte-array progress callbacks. Default = 100ms.
+        /// Callback fires when either this OR <see cref="ProgressReportThresholdBytes"/>
+        /// threshold is crossed. First and final progress callbacks always fire.
+        /// </summary>
+        public int ProgressReportThrottleMs { get; set; } = 100;
 
         /// <summary>
         /// Specify version of <see cref="HttpVersion"/>
