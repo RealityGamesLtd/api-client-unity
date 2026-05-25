@@ -66,7 +66,7 @@ namespace ApiClient.Runtime.Cache
             if (response == null)
             {
                 // didn't get cached response -> we should make a request
-                response = await continuationAction.Invoke();
+                response = await continuationAction.Invoke().ConfigureAwait(false);
 
                 if (cachePolicy != null && response.HasNoErrors)
                 {

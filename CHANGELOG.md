@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.0.0]
+### Breaking
+- **Library no longer forces caller continuations onto the Unity main thread.** `ReturnOnSyncContext` (the per-response `SynchronizationContext.Post` hop) and the `_syncCtx` field were removed. Continuations now resume on whatever thread the caller's `await` captures — exactly the standard .NET async/await contract. Code that awaits a send from a `MonoBehaviour` method (already on main) keeps working unchanged. Code that awaits from a pool/background context and then touches Unity objects must dispatch to main explicitly.
+- **`OnStreamResponse` and `readDelta` callbacks now fire on the pool thread** that read the bytes — no library-side `Post` to main. Host UI bindings to stream responses must marshal to main themselves.
+- **Byte-array `progressCallback` invocations are now (a) synchronous on the pool thread and (b) throttled.** Default throttle: at most one callback per 64 KB of progress OR per 100 ms (whichever crosses first); first and final callbacks always fire. For a 1 MB tile this collapses ~256 main-thread posts into ~16 pool-thread invokes. Tune via the new `ApiClientOptions.ProgressReportThresholdBytes` (default 65536) and `ApiClientOptions.ProgressReportThrottleMs` (default 100).
+- **Default `ByteArrayBufferSize` raised from 4 KB → 64 KB.** Cuts `ReadAsync` iterations 16× per download; lower allocation pressure on Android. Override via `ApiClientOptions.ByteArrayBufferSize` if the old value mattered.
+- **`Extensions.PostOnMainThread<T>` extension removed** (`Runtime/Auxiliary/Extensions.cs`). It had no users outside the library.
+
+### Migration
+Host code that previously relied on response/progress/stream callbacks landing on the Unity main thread should wrap with its own dispatcher (e.g. a `UnityMainThreadDispatcher.Enqueue` call) at the use site, OR await the send from a method that is already running on main. The library no longer makes this guarantee on the caller's behalf.
+
+### Improvement
+- `UrlCache.Process` now `await`s its continuation with `ConfigureAwait(false)` for consistency with the rest of the package's no-context-capture policy. No behaviour change in practice (the call already runs inside `Task.Run`).
+
 ## [1.4.1]
 ### Improvement
 - Priority bulkhead slot and lane scope are now acquired per Polly retry attempt and released between attempts. Previously the handshake was held across the entire retry chain, so backoff sleeps on transient infra codes (408/500/502/504) and 401 retries kept the bulkhead slot occupied and the lane marked in-flight while no HTTP I/O was running — stalling cross-lane traffic and any same-lane queued requests. Chunked Range downloads still hold the slot continuously across all chunks within one attempt; release only happens between attempts. Note: a request that retries must re-queue on its lane's bulkhead per attempt (FIFO-ish), so fresh requests on the same lane can interleave between retries.
