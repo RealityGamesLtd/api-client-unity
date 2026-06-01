@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Threading;
 using ApiClient.Runtime.Cache;
 using ApiClient.Runtime.Requests;
+using ApiClient.Runtime.Streaming;
 
 namespace ApiClient.Runtime
 {
@@ -484,6 +485,43 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
             };
+
+            return request;
+        }
+
+        /// <summary>
+        /// Creates a streaming PUT request that carries a JSON body and reads its response
+        /// as newline-delimited JSON (NDJSON), emitting each line as it arrives. Priority
+        /// lane semantics match <see cref="CreateGetStreamRequest{T}"/>.
+        /// </summary>
+        public HttpClientStreamRequest<T> CreatePutStreamRequest<T>(
+            string url,
+            string jsonBody,
+            CancellationToken ct,
+            AuthenticationHeaderValue authentication = null,
+            Dictionary<string, string> headers = null,
+            bool useDefaultHeaders = true,
+            string priorityLane = null)
+        {
+            var request = new HttpClientStreamRequest<T>(
+                new HttpRequestMessage(HttpMethod.Put, url)
+                {
+                    Version = _httpVersion
+                },
+                Route(priorityLane),
+                ct)
+            {
+                Authentication = authentication,
+                Headers = headers,
+                DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
+                PriorityLane = priorityLane,
+                MessageReader = NewlineDelimitedJsonStreamMessageReader.Instance,
+            };
+
+            if (jsonBody != null)
+            {
+                request.RequestMessage.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
+            }
 
             return request;
         }
