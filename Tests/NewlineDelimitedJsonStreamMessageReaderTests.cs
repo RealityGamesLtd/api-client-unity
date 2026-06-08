@@ -96,7 +96,7 @@ namespace ApiClient.Tests
         }
 
         [Test]
-        public void CancelledTokenThrowsWithoutEmitting()
+        public async Task CancelledTokenThrowsWithoutEmitting()
         {
             var messages = new List<string>();
 
@@ -107,8 +107,17 @@ namespace ApiClient.Tests
             cts.Cancel();
             var context = CreateContext(reader, response, 4096, cts.Token, messages, null);
 
-            Assert.CatchAsync<OperationCanceledException>(
-                () => NewlineDelimitedJsonStreamMessageReader.Instance.ReadAsync(context));
+            var threw = false;
+            try
+            {
+                await NewlineDelimitedJsonStreamMessageReader.Instance.ReadAsync(context).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                threw = true;
+            }
+
+            Assert.IsTrue(threw, "Expected OperationCanceledException to be thrown.");
             CollectionAssert.IsEmpty(messages);
         }
 

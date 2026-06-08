@@ -42,7 +42,7 @@ namespace ApiClient.Runtime.Streaming
             _notifyRead = notifyRead;
         }
 
-        /// <summary>Deserializes and dispatches a single framed JSON message to the caller.</summary>
+        /// <summary>Forwards a single framed JSON message to the transport callback, which deserializes and dispatches it.</summary>
         public Task EmitMessageAsync(string json) => _emitMessage(json);
 
         /// <summary>Reports a framing-level parsing failure for the given raw content.</summary>

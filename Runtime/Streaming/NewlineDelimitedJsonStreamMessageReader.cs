@@ -40,7 +40,7 @@ namespace ApiClient.Runtime.Streaming
                     }
                 }
             }
-            while (!reader.EndOfStream && !context.CancellationToken.IsCancellationRequested);
+            while (!reader.EndOfStream);
 
             await EmitLineAsync(context, lineBuilder);
         }

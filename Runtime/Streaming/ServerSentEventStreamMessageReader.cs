@@ -46,7 +46,10 @@ namespace ApiClient.Runtime.Streaming
                     partialMessageBuilder.Clear();
                 }
 
-                context.ResponseMessage.Content.Headers.ContentLength = readString.Length;
+                if (context.ResponseMessage.Content != null)
+                {
+                    context.ResponseMessage.Content.Headers.ContentLength = readString.Length;
+                }
 
                 MatchCollection matches = null;
                 try
@@ -85,7 +88,7 @@ namespace ApiClient.Runtime.Streaming
                     await context.EmitParsingErrorAsync(readString, "Couldn't get valid JSON string that is matching regex pattern");
                 }
             }
-            while (!reader.EndOfStream && !context.CancellationToken.IsCancellationRequested);
+            while (!reader.EndOfStream);
         }
     }
 }
