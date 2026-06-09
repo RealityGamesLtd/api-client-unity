@@ -7,10 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ApiClient.Runtime.Auxiliary;
 using ApiClient.Runtime.HttpResponses;
+using ApiClient.Runtime.Streaming;
 
 namespace ApiClient.Runtime.Requests
 {
-    public class HttpClientStreamRequest<T> : IHttpRequest
+    public class HttpClientStreamRequest<T> : IStreamingRequest
     {
         public bool IsSent { get; internal set; }
         public CancellationToken CancellationToken { get; }
@@ -18,6 +19,13 @@ namespace ApiClient.Runtime.Requests
         public string RequestId { get; } = Guid.NewGuid().ToString();
         public string PriorityLane { get; internal set; }
         public Uri Uri { get; private set; }
+
+        /// <summary>
+        /// Strategy used to frame the response body into JSON messages. Defaults to
+        /// Server-Sent Events framing; the connection factory selects a different strategy
+        /// (for example newline-delimited JSON) for endpoints that stream other formats.
+        /// </summary>
+        public IStreamMessageReader MessageReader { get; internal set; } = ServerSentEventStreamMessageReader.Instance;
 
         public AuthenticationHeaderValue Authentication
         {

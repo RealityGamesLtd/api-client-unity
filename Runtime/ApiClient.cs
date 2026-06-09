@@ -5,11 +5,11 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using Newtonsoft.Json;
 using ApiClient.Runtime.Requests;
+using ApiClient.Runtime.Streaming;
 using ApiClient.Runtime.HttpResponses;
 using ApiClient.Runtime.Priority;
 using System.Threading;
@@ -48,7 +48,6 @@ namespace ApiClient.Runtime
         private bool _disposed;
         private const string NewAuthenticationHeaderValueKey = "newAuthenticationHeaderValue";
         private const string HttpClientKey = "httpClient";
-        private static readonly Regex JsonExtractorRegex = new(@"({.*})", RegexOptions.Compiled | RegexOptions.Multiline);
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClientHandler _streamHttpClientHandler;
 
@@ -1237,157 +1236,60 @@ namespace ApiClient.Runtime
                         // start task that will update read delta regularly
                         _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token).HandleTaskContinuation();
 
-                        char[] buffer = new char[_streamBufferSize];
-                        var partialMessageBuilder = new StringBuilder();
-
-                        do
+                        async Task EmitParsingErrorAsync(string rawContent, string message)
                         {
-                            if (request.CancellationToken.IsCancellationRequested)
-                            {
-                                throw new TaskCanceledException();
-                            }
+                            OnStreamResponse?.Invoke(await _middleware.ProcessResponse(
+                                new ParsingErrorHttpResponse(
+                                    message,
+                                    responseMessage.Headers,
+                                    responseMessage.Content.Headers,
+                                    rawContent,
+                                    request.RequestMessage.RequestUri,
+                                    responseMessage.StatusCode),
+                                request.RequestId,
+                                false));
+                        }
 
-                            // read the stream
-                            int charsRead = await streamReader.ReadAsync(buffer, request.CancellationToken);
-                            var readString = new string(buffer, 0, charsRead);
-
-                            // update read time
-                            streamLastReadTime = DateTime.UtcNow;
-
-                            /*
-                                 On some platform the message might be returned in chunks. 
-                                 "0A 0A" -> "\n\n" ending characters mean that we've got full message.
-                                 "0D 0A" -> "\r\n" means that we haven't
-                                 As a workaround check for those endings and combine full message from them.
-                             */
-                            if (readString.EndsWith("\n\n") == false)
-                            {
-                                partialMessageBuilder.Append(readString);
-                                continue;
-                            }
-                            else
-                            {
-                                if (partialMessageBuilder.Length > 0)
-                                {
-                                    partialMessageBuilder.Append(readString);
-                                    readString = partialMessageBuilder.ToString();
-                                    partialMessageBuilder.Clear();
-                                }
-                            }
-
-                            // update content length
-                            responseMessage.Content.Headers.ContentLength = readString.Length;
-
-                            // extract json string
-                            MatchCollection matches = null;
+                        async Task EmitStreamMessageAsync(string jsonString)
+                        {
+                            T content;
                             try
                             {
-                                Profiler.BeginSample("Api Client Stream Regex Extraction");
-                                matches = JsonExtractorRegex.Matches(readString);
+                                Profiler.BeginSample("Api Client Stream Deserialization");
+                                content = JsonConvert.DeserializeObject<T>(jsonString);
+                                Profiler.EndSample();
                             }
                             catch (Exception ex)
                             {
-                                OnStreamResponse?.Invoke(await _middleware.ProcessResponse(
-                                    new ParsingErrorHttpResponse(
-                                        ex.Message,
-                                        responseMessage.Headers,
-                                        responseMessage.Content.Headers,
-                                        readString,
-                                        request.RequestMessage.RequestUri,
-                                        responseMessage.StatusCode),
-                                    request.RequestId,
-                                    false));
-                            }
-                            finally
-                            {
                                 Profiler.EndSample();
+                                await EmitParsingErrorAsync(jsonString, ex.Message);
+                                return;
                             }
 
-                            // process matches
-                            if (matches != null && matches.Count > 0)
+                            if (_verboseLogging)
                             {
-                                for (int i = 0; i < matches.Count; i++)
-                                {
-                                    if (request.CancellationToken.IsCancellationRequested)
-                                    {
-                                        throw new TaskCanceledException();
-                                    }
-
-                                    var jsonString = matches[i].Value;
-
-                                    if (!string.IsNullOrEmpty(jsonString))
-                                    {
-                                        T content = default;
-                                        try
-                                        {
-                                            Profiler.BeginSample("Api Client Stream Deserialization");
-                                            content = JsonConvert.DeserializeObject<T>(jsonString);
-                                            Profiler.EndSample();
-
-                                            if (_verboseLogging)
-                                            {
-                                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} Got stream message:{jsonString}");
-                                            }
-
-                                            var response = new HttpResponse<T>(
-                                                content,
-                                                responseMessage.Headers,
-                                                responseMessage.Content?.Headers,
-                                                jsonString,
-                                                request.RequestMessage.RequestUri,
-                                                responseMessage.StatusCode);
-
-                                            OnStreamResponse?.Invoke(response);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Profiler.EndSample();
-                                            // handle parsing error
-                                            OnStreamResponse?.Invoke(await _middleware.ProcessResponse(
-                                                new ParsingErrorHttpResponse(
-                                                    ex.Message,
-                                                    responseMessage.Headers,
-                                                    responseMessage.Content.Headers,
-                                                    readString,
-                                                    request.RequestMessage.RequestUri,
-                                                    responseMessage.StatusCode),
-                                                request.RequestId,
-                                                false));
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // handle invalid string
-                                        OnStreamResponse?.Invoke(await _middleware.ProcessResponse(
-                                            new ParsingErrorHttpResponse(
-                                                "JSON string is null",
-                                                responseMessage.Headers,
-                                                responseMessage.Content.Headers,
-                                                readString,
-                                                request.RequestMessage.RequestUri,
-                                                responseMessage.StatusCode),
-                                            request.RequestId,
-                                            false));
-                                    }
-                                }
+                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} Got stream message:{jsonString}");
                             }
-                            else
-                            {
-                                // handle no matches
-                                OnStreamResponse?.Invoke(
-                                    await _middleware.ProcessResponse(
-                                        new ParsingErrorHttpResponse(
-                                            $"Couldn't get valid JSON string that is matching regex pattern",
-                                            responseMessage.Headers,
-                                            responseMessage.Content.Headers,
-                                            readString,
-                                            request.RequestMessage.RequestUri,
-                                            responseMessage.StatusCode),
-                                        request.RequestId,
-                                        false));
-                            }
+
+                            OnStreamResponse?.Invoke(new HttpResponse<T>(
+                                content,
+                                responseMessage.Headers,
+                                responseMessage.Content?.Headers,
+                                jsonString,
+                                request.RequestMessage.RequestUri,
+                                responseMessage.StatusCode));
                         }
-                        while (!streamReader.EndOfStream && !request.CancellationToken.IsCancellationRequested);
+
+                        var readContext = new StreamMessageReadContext(
+                            streamReader,
+                            responseMessage,
+                            _streamBufferSize,
+                            request.CancellationToken,
+                            EmitStreamMessageAsync,
+                            EmitParsingErrorAsync,
+                            () => streamLastReadTime = DateTime.UtcNow);
+
+                        await request.MessageReader.ReadAsync(readContext);
                     }
                 }
                 catch (OperationCanceledException)
