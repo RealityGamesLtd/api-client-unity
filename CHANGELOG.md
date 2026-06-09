@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.0.1]
+### Changes:
+- Added IStreamMessageReader + StreamMessageReadContext to decouple stream framing from ApiClient.SendStreamRequest.
+- Implemented NDJSON framing (NewlineDelimitedJsonStreamMessageReader) with unit tests.
+- Added CreatePutStreamRequest<T> that sends a JSON PUT and reads the response as NDJSON; HttpClientStreamRequest<T> now carries a MessageReader strategy.
+
 ## [2.0.0]
 ### Breaking
 - **Library no longer forces caller continuations onto the Unity main thread.** `ReturnOnSyncContext` (the per-response `SynchronizationContext.Post` hop) and the `_syncCtx` field were removed. Continuations now resume on whatever thread the caller's `await` captures — exactly the standard .NET async/await contract. Code that awaits a send from a `MonoBehaviour` method (already on main) keeps working unchanged. Code that awaits from a pool/background context and then touches Unity objects must dispatch to main explicitly.
