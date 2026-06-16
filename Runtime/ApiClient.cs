@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -195,6 +196,31 @@ namespace ApiClient.Runtime
             catch (Exception ex)
             {
                 Debug.LogException(ex);
+            }
+        }
+
+        /// <summary>
+        /// Logs a non-success status code when verbose logging is enabled. When the request
+        /// declared the code in <see cref="IHttpRequest.ExpectedStatusCodes"/> (e.g. a 404
+        /// from an existence probe) it is logged at info level; otherwise it is logged as an
+        /// error. This affects log severity only — response semantics are unchanged.
+        /// </summary>
+        private void LogNonSuccessStatus(IHttpRequest request, HttpStatusCode statusCode, string context)
+        {
+            if (!_verboseLogging)
+            {
+                return;
+            }
+
+            var message = $"{nameof(ApiClient)}:{context} statusCode:{statusCode}";
+
+            if (request?.ExpectedStatusCodes != null && request.ExpectedStatusCodes.Contains(statusCode))
+            {
+                Debug.Log(message);
+            }
+            else
+            {
+                Debug.LogError(message);
             }
         }
 
@@ -538,10 +564,7 @@ namespace ApiClient.Runtime
 
                             if (!responseMessage.IsSuccessStatusCode)
                             {
-                                if (_verboseLogging)
-                                {
-                                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendHttpHeadersRequest)} statusCode:{responseMessage.StatusCode}");
-                                }
+                                LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendHttpHeadersRequest));
 
                                 response = new HttpResponse<byte[]>(
                                     default,
@@ -707,10 +730,7 @@ namespace ApiClient.Runtime
         {
             if (!responseMessage.IsSuccessStatusCode)
             {
-                if (_verboseLogging)
-                {
-                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
-                }
+                LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendByteArrayRequest));
 
                 return new HttpResponse<byte[]>(
                     default,
@@ -830,10 +850,7 @@ namespace ApiClient.Runtime
 
             if (!probeResponse.IsSuccessStatusCode)
             {
-                if (_verboseLogging)
-                {
-                    Debug.LogError($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} probe statusCode:{probeResponse.StatusCode}");
-                }
+                LogNonSuccessStatus(request, probeResponse.StatusCode, $"{nameof(ChunkedByteArrayDownloadAsync)} probe");
                 return new HttpResponse<byte[]>(
                     default,
                     probeResponse.Headers,
@@ -1209,10 +1226,7 @@ namespace ApiClient.Runtime
                     // read a stream only when 200 status code was returned
                     if (!responseMessage.IsSuccessStatusCode)
                     {
-                        if (_verboseLogging)
-                        {
-                            Debug.LogError($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
-                        }
+                        LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendStreamRequest));
 
                         // Handle non 2xx response
                         OnStreamResponse?.Invoke(await _middleware.ProcessResponse(new HttpResponse<T>(

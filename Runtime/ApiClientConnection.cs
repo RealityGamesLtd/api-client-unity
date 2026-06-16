@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -92,7 +93,8 @@ namespace ApiClient.Runtime
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             // Headers are applied once via the request's Headers setter; the duplicate
             // foreach that lived here previously caused header values to be added twice.
@@ -105,12 +107,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGet(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -123,7 +126,8 @@ namespace ApiClient.Runtime
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -134,12 +138,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet<T>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGet<T>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -152,7 +157,8 @@ namespace ApiClient.Runtime
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -163,12 +169,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGet<T, E>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGet<T, E>(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -181,7 +188,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -192,12 +200,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePost(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -214,7 +223,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -225,12 +235,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePost<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -247,7 +258,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Post, url)
@@ -258,12 +270,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePost<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePost<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -280,7 +293,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -291,12 +305,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePut(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -313,7 +328,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -324,12 +340,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePut<T>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -346,7 +363,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -357,12 +375,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreatePut<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreatePut<T, E>(url, jsonBody, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             if (jsonBody != null)
@@ -378,7 +397,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -389,12 +409,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreateDelete(url, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -406,7 +427,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -417,12 +439,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete<T>(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreateDelete<T>(url, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -434,7 +457,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientRequest<T, E>(
                 new HttpRequestMessage(HttpMethod.Delete, url)
@@ -445,12 +469,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 null,
-                () => this.CreateDelete<T, E>(url, ct, authentication, headers, useDefaultHeaders, priorityLane))
+                () => this.CreateDelete<T, E>(url, ct, authentication, headers, useDefaultHeaders, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -470,7 +495,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -484,6 +510,7 @@ namespace ApiClient.Runtime
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -501,7 +528,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -515,6 +543,7 @@ namespace ApiClient.Runtime
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
                 MessageReader = NewlineDelimitedJsonStreamMessageReader.Instance,
             };
 
@@ -533,7 +562,8 @@ namespace ApiClient.Runtime
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientByteArrayRequest(
                 new HttpRequestMessage(HttpMethod.Get, url)
@@ -544,12 +574,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGetByteArrayRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGetByteArrayRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
@@ -562,7 +593,8 @@ namespace ApiClient.Runtime
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
             CachePolicy cachePolicy = null,
-            string priorityLane = null)
+            string priorityLane = null,
+            IReadOnlyCollection<HttpStatusCode> expectedStatusCodes = null)
         {
             var request = new HttpClientHeadersRequest(
                 new HttpRequestMessage(HttpMethod.Head, url)
@@ -573,12 +605,13 @@ namespace ApiClient.Runtime
                 ct,
                 _urlCache,
                 cachePolicy,
-                () => this.CreateGetHeadersOnlyRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane))
+                () => this.CreateGetHeadersOnlyRequest(url, ct, authentication, headers, useDefaultHeaders, cachePolicy, priorityLane, expectedStatusCodes))
             {
                 Authentication = authentication,
                 Headers = headers,
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
+                ExpectedStatusCodes = expectedStatusCodes,
             };
 
             return request;
