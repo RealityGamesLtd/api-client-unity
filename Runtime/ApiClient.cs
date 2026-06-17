@@ -276,6 +276,12 @@ namespace ApiClient.Runtime
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+
+                            if (!responseMessage.IsSuccessStatusCode)
+                            {
+                                LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendHttpRequest));
+                            }
+
                             response = new HttpResponse(
                                 request.RequestMessage,
                                 responseMessage.Headers,
@@ -370,6 +376,11 @@ namespace ApiClient.Runtime
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+
+                            if (!responseMessage.IsSuccessStatusCode)
+                            {
+                                LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendHttpRequest));
+                            }
 
                             var (error, body, errorResponse) = await ProcessJsonErrorResponse<E>(responseMessage, request.RequestMessage);
 
@@ -469,6 +480,11 @@ namespace ApiClient.Runtime
                         try
                         {
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+
+                            if (!responseMessage.IsSuccessStatusCode)
+                            {
+                                LogNonSuccessStatus(request, responseMessage.StatusCode, nameof(SendHttpRequest));
+                            }
 
                             var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
 
