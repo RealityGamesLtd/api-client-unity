@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -18,7 +17,6 @@ namespace ApiClient.Runtime.Requests
         public HttpRequestMessage RequestMessage { get; }
         public string RequestId { get; private set; } = Guid.NewGuid().ToString();
         public string PriorityLane { get; internal set; }
-        public IReadOnlyCollection<HttpStatusCode> ExpectedStatusCodes { get; internal set; }
         public Uri Uri { get; private set; }
 
         public AuthenticationHeaderValue Authentication
