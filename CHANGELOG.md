@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.0.2]
+### Changes:
+- ApiClient no longer logs request errors (non-success 4xx/5xx status codes). Reporting request outcomes is now the responsibility of the consumer, which can inspect the returned `IHttpResponse` (`StatusCode`, `IsClientError`/`IsServerError`). No change to default behaviour: request-error logging was already gated behind `ApiClientOptions.VerboseLogging` (off by default). Other verbose diagnostics (download progress, stream messages, range-download warnings) are unchanged.
+
 ## [2.0.1]
 ### Changes:
 - Added IStreamMessageReader + StreamMessageReadContext to decouple stream framing from ApiClient.SendStreamRequest.
