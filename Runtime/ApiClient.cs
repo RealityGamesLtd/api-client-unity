@@ -538,11 +538,6 @@ namespace ApiClient.Runtime
 
                             if (!responseMessage.IsSuccessStatusCode)
                             {
-                                if (_verboseLogging)
-                                {
-                                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendHttpHeadersRequest)} statusCode:{responseMessage.StatusCode}");
-                                }
-
                                 response = new HttpResponse<byte[]>(
                                     default,
                                     responseMessage.Headers,
@@ -551,11 +546,6 @@ namespace ApiClient.Runtime
                                     request.RequestMessage,
                                     responseMessage.StatusCode);
                                 return response;
-                            }
-
-                            if (_verboseLogging)
-                            {
-                                Debug.Log($"{nameof(ApiClient)}:{nameof(SendHttpHeadersRequest)} statusCode:{responseMessage.StatusCode}");
                             }
 
                             response = new HttpResponse<byte[]>(
@@ -707,11 +697,6 @@ namespace ApiClient.Runtime
         {
             if (!responseMessage.IsSuccessStatusCode)
             {
-                if (_verboseLogging)
-                {
-                    Debug.LogError($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
-                }
-
                 return new HttpResponse<byte[]>(
                     default,
                     responseMessage.Headers,
@@ -719,11 +704,6 @@ namespace ApiClient.Runtime
                     null,
                     request.RequestMessage,
                     responseMessage.StatusCode);
-            }
-
-            if (_verboseLogging)
-            {
-                Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} statusCode:{responseMessage.StatusCode}");
             }
 
             await using var contentStream = await responseMessage.Content.ReadAsStreamAsync().ConfigureAwait(false);
@@ -830,10 +810,6 @@ namespace ApiClient.Runtime
 
             if (!probeResponse.IsSuccessStatusCode)
             {
-                if (_verboseLogging)
-                {
-                    Debug.LogError($"{nameof(ApiClient)}:{nameof(ChunkedByteArrayDownloadAsync)} probe statusCode:{probeResponse.StatusCode}");
-                }
                 return new HttpResponse<byte[]>(
                     default,
                     probeResponse.Headers,
@@ -1209,11 +1185,6 @@ namespace ApiClient.Runtime
                     // read a stream only when 200 status code was returned
                     if (!responseMessage.IsSuccessStatusCode)
                     {
-                        if (_verboseLogging)
-                        {
-                            Debug.LogError($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
-                        }
-
                         // Handle non 2xx response
                         OnStreamResponse?.Invoke(await _middleware.ProcessResponse(new HttpResponse<T>(
                             default,
@@ -1223,11 +1194,6 @@ namespace ApiClient.Runtime
                             request.RequestMessage,
                             responseMessage.StatusCode), request.RequestId, true));
                         return;
-                    }
-
-                    if (_verboseLogging)
-                    {
-                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendStreamRequest)} statusCode:{responseMessage.StatusCode}");
                     }
 
                     await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
