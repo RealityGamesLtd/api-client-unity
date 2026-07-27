@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.1.0]
+### Add
+- `RequestTimingSample.NetworkDuration`: pure wire round-trip time of the final `HttpClient.SendAsync` attempt, measured on the ThreadPool inside the send's `Task.Run`. Unlike `Duration` (which brackets the whole `SendHttp*` call and therefore includes Task scheduling, middleware, inter-retry Polly backoff, and — critically — the `SynchronizationContext` post-back to the caller), `NetworkDuration` excludes all caller-thread scheduling latency, so a stalled/janky caller thread no longer inflates it. Consumers driving a connection-quality/latency EWMA should prefer `NetworkDuration` over `Duration`. `TimeSpan.Zero` when no send attempt completed (e.g. aborted before the wire call). Additive: `Duration` is unchanged.
+
+### Note
+- `RequestTimingSample`'s constructor gains a `networkDuration` parameter (positioned right after `duration`). The struct is only constructed inside the library (`ApiClient.EmitTiming`); external code consumes the sample and is unaffected.
+
 ## [2.0.2]
 ### Changes:
 - ApiClient no longer logs request errors (non-success 4xx/5xx status codes). Reporting request outcomes is now the responsibility of the consumer, which can inspect the returned `IHttpResponse` (`StatusCode`, `IsClientError`/`IsServerError`). No change to default behaviour: request-error logging was already gated behind `ApiClientOptions.VerboseLogging` (off by default). Other verbose diagnostics (download progress, stream messages, range-download warnings) are unchanged.

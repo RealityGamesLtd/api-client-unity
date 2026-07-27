@@ -19,8 +19,18 @@ namespace ApiClient.Runtime
     /// post back to the caller. It is not pure network RTT — but it IS what an end
     /// user feels.</para>
     ///
+    /// <para><see cref="NetworkDuration"/>, by contrast, brackets ONLY the
+    /// <c>HttpClient.SendAsync</c> call of the final attempt — measured on the ThreadPool
+    /// inside the send's <see cref="System.Threading.Tasks.Task"/>. It excludes Task
+    /// scheduling, middleware, Polly backoff between retries, and the
+    /// <see cref="System.Threading.SynchronizationContext"/> post back to the caller. It is
+    /// the closest thing to pure server round-trip time and is NOT inflated by a stalled
+    /// caller thread — prefer it for connection-quality / latency EWMAs.</para>
+    ///
     /// <para>For a connection-quality EWMA, consumers should:</para>
     /// <list type="bullet">
+    /// <item>Prefer <see cref="NetworkDuration"/> over <see cref="Duration"/> — the latter
+    /// includes caller-thread scheduling latency and is not a network measurement.</item>
     /// <item>Skip when <see cref="IsSuccess"/> is false (aborts/timeouts/network errors
     /// have meaningless durations).</item>
     /// <item>Skip when <see cref="IsFromCache"/> is true (cached responses return
@@ -29,6 +39,11 @@ namespace ApiClient.Runtime
     /// </remarks>
     public readonly struct RequestTimingSample
     {
+        /// <summary>
+        /// Back-compat overload matching the pre-2.1.0 signature (no wire time). Forwards with
+        /// <see cref="NetworkDuration"/> = <see cref="TimeSpan.Zero"/> so existing callers keep
+        /// compiling; new code should pass a measured wire duration to the primary constructor.
+        /// </summary>
         public RequestTimingSample(
             TimeSpan duration,
             bool isSuccess,
@@ -37,8 +52,22 @@ namespace ApiClient.Runtime
             string requestUri,
             HttpStatusCode? statusCode,
             string priorityLane)
+            : this(duration, TimeSpan.Zero, isSuccess, isFromCache, method, requestUri, statusCode, priorityLane)
+        {
+        }
+
+        public RequestTimingSample(
+            TimeSpan duration,
+            TimeSpan networkDuration,
+            bool isSuccess,
+            bool isFromCache,
+            HttpMethod method,
+            string requestUri,
+            HttpStatusCode? statusCode,
+            string priorityLane)
         {
             Duration = duration;
+            NetworkDuration = networkDuration;
             IsSuccess = isSuccess;
             IsFromCache = isFromCache;
             Method = method;
@@ -50,6 +79,15 @@ namespace ApiClient.Runtime
         /// <summary>Wall-clock duration from the public <c>SendHttp*</c> entry point
         /// to the moment the response is handed back to the caller.</summary>
         public TimeSpan Duration { get; }
+
+        /// <summary>
+        /// Round-trip time of the final <c>HttpClient.SendAsync</c> attempt only, measured on
+        /// the ThreadPool. Excludes Task scheduling, middleware, inter-retry backoff and the
+        /// SynchronizationContext post-back, so a stalled caller thread does NOT inflate it.
+        /// This is the value to feed a network-latency EWMA. <see cref="TimeSpan.Zero"/> when
+        /// no send attempt completed (e.g. aborted before the wire call).
+        /// </summary>
+        public TimeSpan NetworkDuration { get; }
 
         /// <summary>
         /// True when bytes flowed end-to-end and the response is not an abort, timeout,

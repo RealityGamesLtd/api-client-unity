@@ -152,8 +152,21 @@ namespace ApiClient.Runtime
         // Emits one RequestTimingSample for a completed call. Tolerant of any null
         // input — only the duration is required to be meaningful. Subscriber exceptions
         // are swallowed so a buggy listener can't poison the send pipeline.
+        // Elapsed since a Stopwatch.GetTimestamp() reading, as a TimeSpan. Allocation-free
+        // (no Stopwatch instance) so it can bracket every SendAsync attempt cheaply.
+        private static TimeSpan StopwatchElapsedSince(long startTimestamp)
+        {
+            var delta = Stopwatch.GetTimestamp() - startTimestamp;
+            if (delta <= 0) return TimeSpan.Zero;
+            // double-based conversion: `delta * TicksPerSecond` can overflow long for a very
+            // long-running / hung send and wrap to a negative TimeSpan. double avoids the
+            // overflow and still keeps full tick precision after the divide.
+            return TimeSpan.FromTicks((long)(delta * (double)TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+        }
+
         private void EmitTiming(
             Stopwatch sw,
+            TimeSpan networkDuration,
             IHttpResponse response,
             HttpMethod method,
             string requestUri,
@@ -181,6 +194,7 @@ namespace ApiClient.Runtime
 
             var sample = new RequestTimingSample(
                 sw.Elapsed,
+                networkDuration,
                 isSuccess,
                 isFromCache,
                 method,
@@ -215,6 +229,9 @@ namespace ApiClient.Runtime
             var __uri = req?.RequestMessage?.RequestUri?.ToString();
             var __lane = req?.PriorityLane;
             var __sw = Stopwatch.StartNew();
+            // Pure wire time of the final SendAsync attempt (ThreadPool-measured, excludes the
+            // sync-context post-back) — see RequestTimingSample.NetworkDuration.
+            TimeSpan __wire = TimeSpan.Zero;
             IHttpResponse __final = null;
             try
             {
@@ -249,7 +266,10 @@ namespace ApiClient.Runtime
 
                         try
                         {
+                            __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
+                            var __wireStart = Stopwatch.GetTimestamp();
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+                            __wire = StopwatchElapsedSince(__wireStart);
                             response = new HttpResponse(
                                 request.RequestMessage,
                                 responseMessage.Headers,
@@ -285,7 +305,7 @@ namespace ApiClient.Runtime
             }
             finally
             {
-                EmitTiming(__sw, __final, __method, __uri, __lane);
+                EmitTiming(__sw, __wire, __final, __method, __uri, __lane);
             }
         }
 
@@ -307,6 +327,7 @@ namespace ApiClient.Runtime
             var __uri = req?.RequestMessage?.RequestUri?.ToString();
             var __lane = req?.PriorityLane;
             var __sw = Stopwatch.StartNew();
+            TimeSpan __wire = TimeSpan.Zero;
             IHttpResponse __final = null;
             try
             {
@@ -343,7 +364,10 @@ namespace ApiClient.Runtime
 
                         try
                         {
+                            __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
+                            var __wireStart = Stopwatch.GetTimestamp();
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+                            __wire = StopwatchElapsedSince(__wireStart);
 
                             var (error, body, errorResponse) = await ProcessJsonErrorResponse<E>(responseMessage, request.RequestMessage);
 
@@ -386,7 +410,7 @@ namespace ApiClient.Runtime
             }
             finally
             {
-                EmitTiming(__sw, __final, __method, __uri, __lane);
+                EmitTiming(__sw, __wire, __final, __method, __uri, __lane);
             }
         }
 
@@ -407,6 +431,7 @@ namespace ApiClient.Runtime
             var __uri = req?.RequestMessage?.RequestUri?.ToString();
             var __lane = req?.PriorityLane;
             var __sw = Stopwatch.StartNew();
+            TimeSpan __wire = TimeSpan.Zero;
             IHttpResponse __final = null;
             try
             {
@@ -442,7 +467,10 @@ namespace ApiClient.Runtime
                         Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
                         try
                         {
+                            __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
+                            var __wireStart = Stopwatch.GetTimestamp();
                             using var responseMessage = await _httpClient.SendAsync(request.RequestMessage, request.CancellationToken);
+                            __wire = StopwatchElapsedSince(__wireStart);
 
                             var (content, error, body, errorResponse) = await ProcessJsonResponse<T, E>(responseMessage, request.RequestMessage);
 
@@ -486,7 +514,7 @@ namespace ApiClient.Runtime
             }
             finally
             {
-                EmitTiming(__sw, __final, __method, __uri, __lane);
+                EmitTiming(__sw, __wire, __final, __method, __uri, __lane);
             }
         }
 
@@ -497,6 +525,7 @@ namespace ApiClient.Runtime
             var __uri = req?.RequestMessage?.RequestUri?.ToString();
             var __lane = req?.PriorityLane;
             var __sw = Stopwatch.StartNew();
+            TimeSpan __wire = TimeSpan.Zero;
             IHttpResponse __final = null;
             try
             {
@@ -531,10 +560,13 @@ namespace ApiClient.Runtime
 
                         try
                         {
+                            __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
+                            var __wireStart = Stopwatch.GetTimestamp();
                             using var responseMessage = await _httpClient.SendAsync(
                                 request.RequestMessage,
                                 HttpCompletionOption.ResponseHeadersRead,
                                 request.CancellationToken);
+                            __wire = StopwatchElapsedSince(__wireStart);
 
                             if (!responseMessage.IsSuccessStatusCode)
                             {
@@ -585,7 +617,7 @@ namespace ApiClient.Runtime
             }
             finally
             {
-                EmitTiming(__sw, __final, __method, __uri, __lane);
+                EmitTiming(__sw, __wire, __final, __method, __uri, __lane);
             }
         }
 
