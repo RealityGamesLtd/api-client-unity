@@ -39,6 +39,23 @@ namespace ApiClient.Runtime
     /// </remarks>
     public readonly struct RequestTimingSample
     {
+        /// <summary>
+        /// Back-compat overload matching the pre-2.1.0 signature (no wire time). Forwards with
+        /// <see cref="NetworkDuration"/> = <see cref="TimeSpan.Zero"/> so existing callers keep
+        /// compiling; new code should pass a measured wire duration to the primary constructor.
+        /// </summary>
+        public RequestTimingSample(
+            TimeSpan duration,
+            bool isSuccess,
+            bool isFromCache,
+            HttpMethod method,
+            string requestUri,
+            HttpStatusCode? statusCode,
+            string priorityLane)
+            : this(duration, TimeSpan.Zero, isSuccess, isFromCache, method, requestUri, statusCode, priorityLane)
+        {
+        }
+
         public RequestTimingSample(
             TimeSpan duration,
             TimeSpan networkDuration,
