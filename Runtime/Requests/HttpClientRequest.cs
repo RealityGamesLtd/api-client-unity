@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -51,9 +50,7 @@ namespace ApiClient.Runtime.Requests
             }
             get
             {
-                return RequestMessage?.Headers?.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(";", x.Value));
+                return RequestMessage?.Headers?.ToHeadersDictionary();
             }
         }
 

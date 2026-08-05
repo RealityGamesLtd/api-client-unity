@@ -37,6 +37,27 @@ namespace ApiClient.Runtime.HttpResponses
         }
 
         /// <summary>
+        /// Takes already-flattened header dictionaries instead of flattening them here.
+        /// </summary>
+        /// <remarks>
+        /// For a stream, the response headers are sent once but every message used to rebuild the whole
+        /// dictionary from them — 24.6k allocations in the 2026-08-05 deep-profile capture. The caller
+        /// can flatten once for the life of the stream and pass the same dictionary to every message.
+        ///
+        /// The dictionaries are stored as given, not copied, so a caller that shares one across
+        /// responses must treat it as read-only from then on. Nothing mutates these today.
+        /// </remarks>
+        public HttpResponse(T content, Dictionary<string, string> headers, Dictionary<string, string> contentHeaders, string body, Uri requestUri, HttpStatusCode statusCode)
+        {
+            Content = content;
+            Headers = headers;
+            RequestUri = requestUri;
+            StatusCode = statusCode;
+            ContentHeaders = contentHeaders ?? new Dictionary<string, string>();
+            Body = body;
+        }
+
+        /// <summary>
         /// Content retrieved from response body
         /// </summary>
         /// <value></value>
