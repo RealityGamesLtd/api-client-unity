@@ -14,6 +14,14 @@ namespace ApiClient.Runtime.Streaming
     {
         public static readonly NewlineDelimitedJsonStreamMessageReader Instance = new();
 
+        /// <summary>
+        /// A builder that has grown past this is replaced rather than cleared. Mono's StringBuilder is
+        /// copy-on-write: ToString() marks the char buffer as shared, so the next mutation — including
+        /// Clear() — reallocates the whole capacity. Without this, one oversized message makes every
+        /// later Clear() on that stream pay for the peak.
+        /// </summary>
+        private const int MaxRetainedBuilderCapacity = 64 * 1024;
+
         public async Task ReadAsync(StreamMessageReadContext context)
         {
             var reader = context.Reader;
@@ -27,38 +35,85 @@ namespace ApiClient.Runtime.Streaming
                 int charsRead = await reader.ReadAsync(buffer, context.CancellationToken);
                 context.NotifyRead();
 
+                // Walk newline to newline rather than character by character. Appending one char at a
+                // time made the builder the app's third-largest allocator (8.4 MB of the 185 MB in the
+                // 2026-08-05 deep-profile capture) because every growth step reallocates its buffer.
+                int lineStart = 0;
                 for (int i = 0; i < charsRead; i++)
                 {
-                    var character = buffer[i];
-                    if (character == '\n')
+                    if (buffer[i] != '\n') continue;
+
+                    if (lineBuilder.Length == 0)
                     {
-                        await EmitLineAsync(context, lineBuilder);
+                        // Nothing pending, so this line lies wholly inside the chunk and can go
+                        // straight out as one string — no builder involvement at all.
+                        await EmitSpanAsync(context, buffer, lineStart, i - lineStart);
                     }
                     else
                     {
-                        lineBuilder.Append(character);
+                        lineBuilder.Append(buffer, lineStart, i - lineStart);
+                        lineBuilder = await EmitBuilderAsync(context, lineBuilder);
                     }
+
+                    lineStart = i + 1;
+                }
+
+                // Whatever trails the last newline continues into the next read.
+                if (charsRead > lineStart)
+                {
+                    lineBuilder.Append(buffer, lineStart, charsRead - lineStart);
                 }
             }
             while (!reader.EndOfStream);
 
-            await EmitLineAsync(context, lineBuilder);
+            // A final line with no terminating newline.
+            if (lineBuilder.Length > 0)
+            {
+                await EmitBuilderAsync(context, lineBuilder);
+            }
         }
 
-        private static async Task EmitLineAsync(StreamMessageReadContext context, StringBuilder lineBuilder)
+        /// <summary>Emits one line held entirely in <paramref name="buffer"/>, trimmed, as a single string.</summary>
+        private static Task EmitSpanAsync(StreamMessageReadContext context, char[] buffer, int start, int length)
         {
-            if (lineBuilder.Length == 0)
+            int end = start + length;
+            while (start < end && char.IsWhiteSpace(buffer[start])) start++;
+            while (end > start && char.IsWhiteSpace(buffer[end - 1])) end--;
+
+            return end > start
+                ? context.EmitMessageAsync(new string(buffer, start, end - start))
+                : Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Emits the buffered line, trimmed, and returns the builder to keep using — a fresh one when
+        /// the old grew past <see cref="MaxRetainedBuilderCapacity"/>. Trimming is applied to the
+        /// builder's bounds so only one string is produced, where ToString().Trim() produced two.
+        /// </summary>
+        private static async Task<StringBuilder> EmitBuilderAsync(StreamMessageReadContext context, StringBuilder lineBuilder)
+        {
+            int start = 0;
+            int end = lineBuilder.Length;
+            while (start < end && char.IsWhiteSpace(lineBuilder[start])) start++;
+            while (end > start && char.IsWhiteSpace(lineBuilder[end - 1])) end--;
+
+            if (end > start)
             {
-                return;
+                await context.EmitMessageAsync(lineBuilder.ToString(start, end - start));
             }
 
-            var line = lineBuilder.ToString().Trim();
+            if (lineBuilder.Capacity > MaxRetainedBuilderCapacity)
+            {
+                // Sized to the message just emitted, NOT dropped to nothing. Dropping it meant a stream
+                // whose messages are consistently large re-doubled a builder from 16 chars every single
+                // time, which cost more than the Clear() it avoided — visible in the 13-38 capture as
+                // ExpandByABlock rising while set_Length fell. Starting at the last message's length
+                // avoids both the copy-on-write Clear and the regrowth.
+                return new StringBuilder(end - start > 0 ? end - start : 0);
+            }
+
             lineBuilder.Clear();
-
-            if (line.Length > 0)
-            {
-                await context.EmitMessageAsync(line);
-            }
+            return lineBuilder;
         }
     }
 }

@@ -29,21 +29,31 @@ namespace ApiClient.Runtime.Streaming
                 context.CancellationToken.ThrowIfCancellationRequested();
 
                 int charsRead = await reader.ReadAsync(buffer, context.CancellationToken);
-                var readString = new string(buffer, 0, charsRead);
 
                 context.NotifyRead();
 
-                if (readString.EndsWith("\n\n") == false)
+                // Test the delimiter on the chunk itself. Materialising the whole chunk as a string
+                // first allocated one copy per read even when the chunk was only going to be buffered.
+                bool endsMessage = charsRead >= 2
+                                   && buffer[charsRead - 1] == '\n'
+                                   && buffer[charsRead - 2] == '\n';
+
+                if (endsMessage == false)
                 {
-                    partialMessageBuilder.Append(readString);
+                    partialMessageBuilder.Append(buffer, 0, charsRead);
                     continue;
                 }
 
+                string readString;
                 if (partialMessageBuilder.Length > 0)
                 {
-                    partialMessageBuilder.Append(readString);
+                    partialMessageBuilder.Append(buffer, 0, charsRead);
                     readString = partialMessageBuilder.ToString();
                     partialMessageBuilder.Clear();
+                }
+                else
+                {
+                    readString = new string(buffer, 0, charsRead);
                 }
 
                 if (context.ResponseMessage.Content != null)
