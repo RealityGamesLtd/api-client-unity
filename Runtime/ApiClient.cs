@@ -35,6 +35,14 @@ namespace ApiClient.Runtime
         private readonly HttpClient _httpClient;
         private readonly HttpClient _streamHttpClient;
         private readonly IApiClientMiddleware _middleware;
+        /// <summary>
+        /// Byte buffer a stream's <see cref="StreamReader"/> refills from the transport. Each refill is
+        /// one TLS read operation, and Mono allocates a fresh ~16 KB buffer per operation, so this
+        /// directly divides the TLS allocation for stream traffic. Not the same thing as
+        /// <see cref="_streamBufferSize"/>, which is the char block the reader loop frames from.
+        /// </summary>
+        private const int StreamReadBufferSizeBytes = 16 * 1024;
+
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
         private readonly int _byteArrayBufferSize = 65536;
@@ -360,7 +368,7 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample($"Api Client Execute Request [E]: {request.Uri}");
+                        Profiler.BeginSample("Api Client Execute Request [E]");
 
                         try
                         {
@@ -464,7 +472,7 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
+                        Profiler.BeginSample("Api Client Execute Request");
                         try
                         {
                             __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
@@ -950,7 +958,22 @@ namespace ApiClient.Runtime
 
             ct.ThrowIfCancellationRequested();
 
-            var responseBytes = memoryStream.ToArray();
+            // The stream was created with capacity == totalLength and filled to exactly that, so its
+            // internal buffer is already the array we want. ToArray() would allocate a second full-size
+            // copy, doubling peak memory for the whole transfer. Hand the buffer over when the fit is
+            // exact, and only copy if it is not.
+            byte[] responseBytes;
+            if (memoryStream.TryGetBuffer(out var assembled)
+                && assembled.Offset == 0
+                && assembled.Count == assembled.Array.Length)
+            {
+                responseBytes = assembled.Array;
+            }
+            else
+            {
+                responseBytes = memoryStream.ToArray();
+            }
+
             UpdateResponseMetrics(responseBytes.Length, totalLength);
 
             // The probe's Content-Range / chunk Content-Length describe the first chunk
@@ -1207,7 +1230,7 @@ namespace ApiClient.Runtime
 
                     await _middleware.ProcessRequest(request, true);
 
-                    Profiler.BeginSample($"Api Client Execute Stream Request: {request.Uri}");
+                    Profiler.BeginSample("Api Client Execute Stream Request");
 
                     using var responseMessage = await _streamHttpClient.SendAsync(
                         request.RequestMessage,
@@ -1228,8 +1251,21 @@ namespace ApiClient.Runtime
                         return;
                     }
 
+                    // Flatten the response headers once. They are sent at the start of the stream and
+                    // never change, but every framed message used to rebuild the whole dictionary from
+                    // them: 24.6k allocations in the 2026-08-05 deep-profile capture. Content headers
+                    // are deliberately NOT hoisted — the SSE reader rewrites ContentLength on the shared
+                    // response message for each message it frames, so those must stay per-message.
+                    var streamHeaders = responseMessage.Headers.ToHeadersDictionary();
+
                     await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                    using (StreamReader streamReader = new(contentStream, encoding: Encoding.UTF8, true))
+                    // Explicit read buffer. StreamReader defaults to 1024 bytes, and every refill of it
+                    // becomes one SslStream.ReadAsync — for which Mono allocates a fresh ~16 KB
+                    // BufferOffsetSize2 per operation. That is a ~16x amplification of every byte of
+                    // stream traffic, and it made those TLS buffers the single largest allocator in the
+                    // 2026-08-05 deep-profile captures at 29.7 MB / 2440 reads (22% of all bytes).
+                    // Reading in larger blocks cuts the operation count proportionally.
+                    using (StreamReader streamReader = new(contentStream, Encoding.UTF8, true, StreamReadBufferSizeBytes))
                     {
                         // start task that will update read delta regularly
                         _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token).HandleTaskContinuation();
@@ -1271,8 +1307,8 @@ namespace ApiClient.Runtime
 
                             OnStreamResponse?.Invoke(new HttpResponse<T>(
                                 content,
-                                responseMessage.Headers,
-                                responseMessage.Content?.Headers,
+                                streamHeaders,
+                                responseMessage.Content?.Headers.ToHeadersDictionary(),
                                 jsonString,
                                 request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode));
