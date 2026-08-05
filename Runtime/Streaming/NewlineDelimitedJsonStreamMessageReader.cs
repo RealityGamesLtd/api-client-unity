@@ -28,6 +28,19 @@ namespace ApiClient.Runtime.Streaming
             var buffer = new char[context.BufferSize];
             var lineBuilder = new StringBuilder();
 
+            // When the transport can deserialize straight from a TextReader, no line is ever
+            // materialised as a string: an in-chunk line is wrapped where it lies in the read
+            // buffer, a straddling line is wrapped over the builder. One reusable wrapper each
+            // for the life of the stream. In the 12-33 capture one line reached 845 KB — the
+            // string this path skips is the stream's dominant allocation.
+            CharSegmentTextReader segmentReader = null;
+            StringBuilderTextReader builderReader = null;
+            if (context.SupportsReaderEmit)
+            {
+                segmentReader = new CharSegmentTextReader();
+                builderReader = new StringBuilderTextReader();
+            }
+
             do
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
@@ -46,13 +59,13 @@ namespace ApiClient.Runtime.Streaming
                     if (lineBuilder.Length == 0)
                     {
                         // Nothing pending, so this line lies wholly inside the chunk and can go
-                        // straight out as one string — no builder involvement at all.
-                        await EmitSpanAsync(context, buffer, lineStart, i - lineStart);
+                        // straight out where it sits — no builder involvement at all.
+                        await EmitSpanAsync(context, buffer, lineStart, i - lineStart, segmentReader);
                     }
                     else
                     {
                         lineBuilder.Append(buffer, lineStart, i - lineStart);
-                        lineBuilder = await EmitBuilderAsync(context, lineBuilder);
+                        lineBuilder = await EmitBuilderAsync(context, lineBuilder, builderReader);
                     }
 
                     lineStart = i + 1;
@@ -69,28 +82,46 @@ namespace ApiClient.Runtime.Streaming
             // A final line with no terminating newline.
             if (lineBuilder.Length > 0)
             {
-                await EmitBuilderAsync(context, lineBuilder);
+                await EmitBuilderAsync(context, lineBuilder, builderReader);
             }
         }
 
-        /// <summary>Emits one line held entirely in <paramref name="buffer"/>, trimmed, as a single string.</summary>
-        private static Task EmitSpanAsync(StreamMessageReadContext context, char[] buffer, int start, int length)
+        /// <summary>
+        /// Emits one line held entirely in <paramref name="buffer"/>, trimmed — through
+        /// <paramref name="segmentReader"/> when the transport takes readers, otherwise as a
+        /// single string.
+        /// </summary>
+        private static Task EmitSpanAsync(StreamMessageReadContext context, char[] buffer, int start, int length, CharSegmentTextReader segmentReader)
         {
             int end = start + length;
             while (start < end && char.IsWhiteSpace(buffer[start])) start++;
             while (end > start && char.IsWhiteSpace(buffer[end - 1])) end--;
 
-            return end > start
-                ? context.EmitMessageAsync(new string(buffer, start, end - start))
-                : Task.CompletedTask;
+            if (end <= start)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (segmentReader != null)
+            {
+                // Safe to lend the read buffer: the emit is awaited before the scan continues,
+                // so the buffer is not refilled while the transport is consuming it.
+                segmentReader.Reset(buffer, start, end - start);
+                return context.EmitMessageAsync(segmentReader);
+            }
+
+            return context.EmitMessageAsync(new string(buffer, start, end - start));
         }
 
         /// <summary>
-        /// Emits the buffered line, trimmed, and returns the builder to keep using — a fresh one when
-        /// the old grew past <see cref="MaxRetainedBuilderCapacity"/>. Trimming is applied to the
-        /// builder's bounds so only one string is produced, where ToString().Trim() produced two.
+        /// Emits the buffered line, trimmed, and returns the builder to keep using. On the string
+        /// path that is a fresh builder when the old grew past <see cref="MaxRetainedBuilderCapacity"/>
+        /// (ToString() marks the buffer shared, so a big builder would reallocate on every Clear);
+        /// the reader path never produces the string, so it always keeps the builder. Trimming is
+        /// applied to the builder's bounds so at most one string is produced, where
+        /// ToString().Trim() produced two.
         /// </summary>
-        private static async Task<StringBuilder> EmitBuilderAsync(StreamMessageReadContext context, StringBuilder lineBuilder)
+        private static async Task<StringBuilder> EmitBuilderAsync(StreamMessageReadContext context, StringBuilder lineBuilder, StringBuilderTextReader builderReader)
         {
             int start = 0;
             int end = lineBuilder.Length;
@@ -99,6 +130,27 @@ namespace ApiClient.Runtime.Streaming
 
             if (end > start)
             {
+                if (builderReader != null)
+                {
+                    // The builder is only cleared below, after the emit completes, so lending
+                    // it out here is safe.
+                    builderReader.Reset(lineBuilder, start, end);
+                    await context.EmitMessageAsync(builderReader);
+                    builderReader.Release();
+
+                    // This path never calls ToString(), so the builder's buffer is never
+                    // marked shared and Clear() is allocation-free at ANY capacity — the
+                    // copy-on-write hazard the capacity trim below exists for cannot happen.
+                    // Keeping the builder at peak size trades stream-lifetime retention for
+                    // zero per-message allocation, the right trade for the wave-shaped NDJSON
+                    // streams this path serves: a stream of large lines reuses one buffer
+                    // instead of allocating a message-sized builder per message. (After a
+                    // parse error CaptureBounded does call ToString(), so the next Clear()
+                    // reallocates once — rare and bounded.)
+                    lineBuilder.Clear();
+                    return lineBuilder;
+                }
+
                 await context.EmitMessageAsync(lineBuilder.ToString(start, end - start));
             }
 

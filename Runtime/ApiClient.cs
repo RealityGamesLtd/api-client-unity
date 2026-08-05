@@ -45,6 +45,23 @@ namespace ApiClient.Runtime
 
         private readonly int _streamBufferSize = 4096;
         private readonly int _streamReadDeltaUpdateTime = 1000;
+
+        /// <summary>
+        /// How much of a framed message is materialised for the parsing-error report when the
+        /// reader-emit path fails to deserialize it. The happy path never builds the string.
+        /// </summary>
+        private const int StreamParsingErrorCaptureChars = 4096;
+
+        /// <summary>
+        /// Serializer for the stream reader-emit path, cached per thread because stream
+        /// messages deserialize on pool threads and <see cref="JsonSerializer"/> is not
+        /// thread-safe. <see cref="JsonSerializer.CheckAdditionalContent"/> mirrors
+        /// <see cref="JsonConvert.DeserializeObject{T}(string)"/>, which enables it when given
+        /// no settings — trailing garbage after the JSON value must stay a parsing error.
+        /// <see cref="JsonConvert.DefaultSettings"/> is never assigned in this repo or the
+        /// game, so <see cref="JsonSerializer.CreateDefault()"/> matches the convert path.
+        /// </summary>
+        [ThreadStatic] private static JsonSerializer _streamSerializerForThread;
         private readonly int _byteArrayBufferSize = 65536;
         private readonly int _progressReportThresholdBytes = 64 * 1024;
         private readonly int _progressReportThrottleMs = 100;
@@ -1314,12 +1331,55 @@ namespace ApiClient.Runtime
                                 responseMessage.StatusCode));
                         }
 
+                        // Reader-emit path: Newtonsoft parses straight from the framing buffers,
+                        // so the message never exists as a string (NDJSON lines have reached
+                        // 845 KB) and the response's Body is null. The SSE reader never calls
+                        // this — its consumers re-parse the raw body per message type
+                        // (StreamServiceMessageParser), so the string there is load-bearing.
+                        async Task EmitStreamMessageFromReaderAsync(FramedMessageTextReader messageReader)
+                        {
+                            T content;
+                            try
+                            {
+                                Profiler.BeginSample("Api Client Stream Deserialization");
+                                using var jsonReader = new JsonTextReader(messageReader)
+                                {
+                                    // The framed reader is reused for the next message; nothing to close.
+                                    CloseInput = false,
+                                    ArrayPool = JsonCharArrayPool.Instance,
+                                };
+                                content = GetStreamSerializer().Deserialize<T>(jsonReader);
+                                Profiler.EndSample();
+                            }
+                            catch (Exception ex)
+                            {
+                                Profiler.EndSample();
+                                // The raw text is only materialised once parsing has already
+                                // failed, and bounded so a huge corrupt line cannot balloon it.
+                                await EmitParsingErrorAsync(
+                                    messageReader.CaptureBounded(StreamParsingErrorCaptureChars),
+                                    ex.Message);
+                                return;
+                            }
+
+                            OnStreamResponse?.Invoke(new HttpResponse<T>(
+                                content,
+                                streamHeaders,
+                                responseMessage.Content?.Headers.ToHeadersDictionary(),
+                                null,
+                                request.RequestMessage.RequestUri,
+                                responseMessage.StatusCode));
+                        }
+
                         var readContext = new StreamMessageReadContext(
                             streamReader,
                             responseMessage,
                             _streamBufferSize,
                             request.CancellationToken,
                             EmitStreamMessageAsync,
+                            // Verbose logging prints each message, which needs the string —
+                            // fall back to the materialising path for that build setting.
+                            _verboseLogging ? null : EmitStreamMessageFromReaderAsync,
                             EmitParsingErrorAsync,
                             () => streamLastReadTime = DateTime.UtcNow);
 
@@ -1375,6 +1435,20 @@ namespace ApiClient.Runtime
         }
 
         #region Helper Methods
+
+        /// <summary>See <see cref="_streamSerializerForThread"/> for the caching rationale.</summary>
+        private static JsonSerializer GetStreamSerializer()
+        {
+            var serializer = _streamSerializerForThread;
+            if (serializer == null)
+            {
+                serializer = JsonSerializer.CreateDefault();
+                serializer.CheckAdditionalContent = true;
+                _streamSerializerForThread = serializer;
+            }
+
+            return serializer;
+        }
 
         protected T DeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)
         {

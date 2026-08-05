@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Add
+- Stream reader-emit path: `StreamMessageReadContext` gains an optional `Func<FramedMessageTextReader, Task>` emit callback, and `NewlineDelimitedJsonStreamMessageReader` prefers it when present — a framed NDJSON line is handed to the transport as a reusable `TextReader` over the framing buffers (`CharSegmentTextReader` over the read chunk, `StringBuilderTextReader` over the reassembly builder) instead of being materialised as a string. `ApiClient.SendStreamRequest` deserializes that reader with a per-thread cached `JsonSerializer` (`CheckAdditionalContent` on, matching `JsonConvert.DeserializeObject`) through a `JsonTextReader` whose char buffers are recycled per thread (`JsonCharArrayPool`). NDJSON lines have reached 845 KB; on this path the per-message string, and the `StringBuilder.ToString` behind it, no longer exist.
+
+### Note
+- On the reader-emit path `HttpResponse<T>.Body` is `null` (there is no string to hand out). A failed parse still reports raw text: the framed reader re-materialises a bounded snapshot (first 4096 chars) for `ParsingErrorHttpResponse` only when deserialization throws.
+- `VerboseLogging` keeps the old string path (the per-message log needs the text), so its behavior — including `Body` — is unchanged.
+- The SSE reader (`ServerSentEventStreamMessageReader`) is deliberately unchanged: consumers of that stream re-parse the raw body per message type, so the string is load-bearing there.
+
 ## [2.1.0]
 ### Add
 - `RequestTimingSample.NetworkDuration`: pure wire round-trip time of the final `HttpClient.SendAsync` attempt, measured on the ThreadPool inside the send's `Task.Run`. Unlike `Duration` (which brackets the whole `SendHttp*` call and therefore includes Task scheduling, middleware, inter-retry Polly backoff, and — critically — the `SynchronizationContext` post-back to the caller), `NetworkDuration` excludes all caller-thread scheduling latency, so a stalled/janky caller thread no longer inflates it. Consumers driving a connection-quality/latency EWMA should prefer `NetworkDuration` over `Duration`. `TimeSpan.Zero` when no send attempt completed (e.g. aborted before the wire call). Additive: `Duration` is unchanged.
