@@ -26,6 +26,15 @@ namespace ApiClient.Runtime.Requests
         /// </summary>
         public IStreamMessageReader MessageReader { get; internal set; } = ServerSentEventStreamMessageReader.Instance;
 
+        /// <summary>
+        /// When true the request is sent through a client with automatic response decompression,
+        /// so the server may gzip the stream (~8-10x fewer wire bytes for JSON, proportionally
+        /// less TLS buffer churn). Default false: compression is only safe for bulk-transfer
+        /// streams (NDJSON waves) — an SSE stream behind a proxy that buffers gzip output would
+        /// have its messages held back, defeating the stream.
+        /// </summary>
+        public bool AllowCompressedResponse { get; set; }
+
         public AuthenticationHeaderValue Authentication
         {
             get => _authentication;

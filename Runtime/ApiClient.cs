@@ -84,6 +84,8 @@ namespace ApiClient.Runtime
         private const string HttpClientKey = "httpClient";
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClientHandler _streamHttpClientHandler;
+        private readonly HttpClientHandler _compressedStreamHttpClientHandler;
+        private readonly HttpClient _compressedStreamHttpClient;
 
         public ApiClient(ApiClientOptions options)
         {
@@ -104,6 +106,22 @@ namespace ApiClient.Runtime
                 AutomaticDecompression = DecompressionMethods.None
             };
             _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
+            {
+                Timeout = options.Timeout
+            };
+
+            // Streams that opt in (HttpClientStreamRequest.AllowCompressedResponse) go through a
+            // handler with decompression enabled. A separate client is required, not a header:
+            // Mono derives the Accept-Encoding header from the HANDLER's AutomaticDecompression at
+            // send time, so per-request header edits cannot control stream compression. Kept OFF
+            // for SSE — a proxy that buffers gzip output would hold messages back; NDJSON waves
+            // are bulk transfers where ~8-10x fewer wire bytes directly cut the TLS record-buffer
+            // churn (the top allocator in the 2026-08-05 deep captures).
+            _compressedStreamHttpClientHandler = new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+            _compressedStreamHttpClient = new HttpClient(_compressedStreamHttpClientHandler, disposeHandler: true)
             {
                 Timeout = options.Timeout
             };
@@ -1240,7 +1258,12 @@ namespace ApiClient.Runtime
                 DateTime streamLastReadTime = DateTime.UtcNow;
                 var updateReadDeltaValueCts = new CancellationTokenSource();
 
-                request.RequestMessage.Headers.Remove("Accept-Encoding");
+                // The header is handler-driven in Mono (see the compressed-client comment in the
+                // ctor); this strip is defensive for headers a caller added on the message itself.
+                if (!request.AllowCompressedResponse)
+                {
+                    request.RequestMessage.Headers.Remove("Accept-Encoding");
+                }
 
                 try
                 {
@@ -1258,7 +1281,8 @@ namespace ApiClient.Runtime
 
                     Profiler.BeginSample("Api Client Execute Stream Request");
 
-                    using var responseMessage = await _streamHttpClient.SendAsync(
+                    var streamClient = request.AllowCompressedResponse ? _compressedStreamHttpClient : _streamHttpClient;
+                    using var responseMessage = await streamClient.SendAsync(
                         request.RequestMessage,
                         HttpCompletionOption.ResponseHeadersRead,
                         request.CancellationToken);
@@ -1661,6 +1685,7 @@ namespace ApiClient.Runtime
             {
                 _httpClient?.Dispose();
                 _streamHttpClient?.Dispose();
+                _compressedStreamHttpClient?.Dispose();
                 OnRequestCompleted = null;
             }
 
