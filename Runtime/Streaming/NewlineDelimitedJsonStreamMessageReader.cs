@@ -26,7 +26,10 @@ namespace ApiClient.Runtime.Streaming
         {
             var reader = context.Reader;
             var buffer = new char[context.BufferSize];
-            var lineBuilder = new StringBuilder();
+            // Seeded rather than default-16: a straddling line rebuilds the builder from scratch on
+            // every stream (each nearby/cells wave is a new stream), and the doubling steps from 16
+            // up showed up as 1.28 MB of ExpandByABlock in the 2026-08-05 drone deep capture.
+            var lineBuilder = new StringBuilder(8 * 1024);
 
             // When the transport can deserialize straight from a TextReader, no line is ever
             // materialised as a string: an in-chunk line is wrapped where it lies in the read

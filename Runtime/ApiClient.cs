@@ -36,14 +36,23 @@ namespace ApiClient.Runtime
         private readonly HttpClient _streamHttpClient;
         private readonly IApiClientMiddleware _middleware;
         /// <summary>
-        /// Byte buffer a stream's <see cref="StreamReader"/> refills from the transport. Each refill is
-        /// one TLS read operation, and Mono allocates a fresh ~16 KB buffer per operation, so this
-        /// directly divides the TLS allocation for stream traffic. Not the same thing as
+        /// Byte buffer a stream's <see cref="StreamReader"/> refills from the transport. Each refill
+        /// is one HTTP-level read, and Mono wraps every such read in a timeout (linked
+        /// CancellationTokenSource + Task.Delay + WhenAny) plus chunk-parser iterations, so larger
+        /// refills cut that per-read machinery proportionally during message waves. Idle streams are
+        /// unaffected (a read returns as soon as any bytes arrive). Cost: one 64 KB buffer per ACTIVE
+        /// stream, of which there are a handful.
+        ///
+        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2, ~16 KB
+        /// per TLS record op — the top allocator in the 2026-08-05 deep captures): that scales with
+        /// WIRE BYTES and record count, not with how big our reads are — raising this buffer 1 KB →
+        /// 16 KB measurably did not move it. The levers for that bucket are less wire volume
+        /// (server-side payload pruning) and fewer requests. Not the same thing as
         /// <see cref="_streamBufferSize"/>, which is the char block the reader loop frames from.
         /// </summary>
-        private const int StreamReadBufferSizeBytes = 16 * 1024;
+        private const int StreamReadBufferSizeBytes = 64 * 1024;
 
-        private readonly int _streamBufferSize = 4096;
+        private readonly int _streamBufferSize = 16384;
         private readonly int _streamReadDeltaUpdateTime = 1000;
 
         /// <summary>
