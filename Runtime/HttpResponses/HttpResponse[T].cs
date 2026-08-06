@@ -41,7 +41,7 @@ namespace ApiClient.Runtime.HttpResponses
         /// </summary>
         /// <remarks>
         /// For a stream, the response headers are sent once but every message used to rebuild the whole
-        /// dictionary from them — 24.6k allocations in the 2026-08-05 deep-profile capture. The caller
+        /// dictionary from them — one dictionary plus one string per header, per message. The caller
         /// can flatten once for the life of the stream and pass the same dictionary to every message.
         ///
         /// The dictionaries are stored as given, not copied, so a caller that shares one across

@@ -10,8 +10,8 @@ namespace ApiClient.Tests
     /// <summary>
     /// In-memory tests for <see cref="RequestPriorityCoordinator"/> covering generic
     /// multi-lane semantics. The HTTP-touching paths (chunked Range downloads, 200
-    /// fallback, mid-transfer 200 regression) are exercised on-device against the real
-    /// backend — see the manual verification section of the priority-lane plan.
+    /// fallback, mid-transfer 200 regression) are not covered here — they need a real
+    /// server and are verified manually.
     /// </summary>
     public class PriorityCoordinatorTests
     {

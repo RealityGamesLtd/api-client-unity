@@ -27,15 +27,15 @@ namespace ApiClient.Runtime.Streaming
             var reader = context.Reader;
             var buffer = new char[context.BufferSize];
             // Seeded rather than default-16: a straddling line rebuilds the builder from scratch on
-            // every stream (each nearby/cells wave is a new stream), and the doubling steps from 16
-            // up showed up as 1.28 MB of ExpandByABlock in the 2026-08-05 drone deep capture.
+            // every stream, and the doubling steps up from 16 are pure ExpandByABlock garbage for
+            // any workload that opens streams repeatedly.
             var lineBuilder = new StringBuilder(8 * 1024);
 
             // When the transport can deserialize straight from a TextReader, no line is ever
             // materialised as a string: an in-chunk line is wrapped where it lies in the read
             // buffer, a straddling line is wrapped over the builder. One reusable wrapper each
-            // for the life of the stream. In the 12-33 capture one line reached 845 KB — the
-            // string this path skips is the stream's dominant allocation.
+            // for the life of the stream. Lines can run to hundreds of KB, so the string this
+            // path skips is the stream's dominant allocation.
             CharSegmentTextReader segmentReader = null;
             StringBuilderTextReader builderReader = null;
             if (context.SupportsReaderEmit)
@@ -52,8 +52,8 @@ namespace ApiClient.Runtime.Streaming
                 context.NotifyRead();
 
                 // Walk newline to newline rather than character by character. Appending one char at a
-                // time made the builder the app's third-largest allocator (8.4 MB of the 185 MB in the
-                // 2026-08-05 deep-profile capture) because every growth step reallocates its buffer.
+                // time made the builder one of the heaviest allocators on the stream path, because
+                // every growth step reallocates its buffer.
                 int lineStart = 0;
                 for (int i = 0; i < charsRead; i++)
                 {
@@ -159,11 +159,11 @@ namespace ApiClient.Runtime.Streaming
 
             if (lineBuilder.Capacity > MaxRetainedBuilderCapacity)
             {
-                // Sized to the message just emitted, NOT dropped to nothing. Dropping it meant a stream
-                // whose messages are consistently large re-doubled a builder from 16 chars every single
-                // time, which cost more than the Clear() it avoided — visible in the 13-38 capture as
-                // ExpandByABlock rising while set_Length fell. Starting at the last message's length
-                // avoids both the copy-on-write Clear and the regrowth.
+                // Sized to the message just emitted, NOT dropped to nothing. Dropping it means a stream
+                // whose messages are consistently large re-doubles a builder from 16 chars every single
+                // time, which costs more than the Clear() it avoids (ExpandByABlock rises while
+                // set_Length falls). Starting at the last message's length avoids both the
+                // copy-on-write Clear and the regrowth.
                 return new StringBuilder(end - start > 0 ? end - start : 0);
             }
 

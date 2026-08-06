@@ -43,9 +43,9 @@ namespace ApiClient.Runtime
         /// unaffected (a read returns as soon as any bytes arrive). Cost: one 64 KB buffer per ACTIVE
         /// stream, of which there are a handful.
         ///
-        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2 — the top
-        /// allocator in the 2026-08 deep captures, 48 MB of a 238 MB session), and raising this
-        /// buffer 1 KB → 16 KB measurably did not move it. Mechanism, read off the shipped BCL
+        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2), which
+        /// profiles as the largest single allocator on Android; raising this buffer 1 KB → 16 KB
+        /// measurably did not move it. Mechanism, read off the shipped BCL
         /// (unityaot System.dll): MobileAuthenticatedStream.StartOperation calls readBuffer.Reset()
         /// twice per read — once up front, once in its finally — and Reset() unconditionally does
         /// `Buffer = new byte[InitialSize]` (16500 for reads, 16384 for writes). So every TLS read
@@ -135,9 +135,9 @@ namespace ApiClient.Runtime
             // handler with decompression enabled. A separate client is required, not a header:
             // Mono derives the Accept-Encoding header from the HANDLER's AutomaticDecompression at
             // send time, so per-request header edits cannot control stream compression. Kept OFF
-            // for SSE — a proxy that buffers gzip output would hold messages back; NDJSON waves
-            // are bulk transfers where ~8-10x fewer wire bytes directly cut the TLS record-buffer
-            // churn (the top allocator in the 2026-08-05 deep captures).
+            // for SSE — a proxy that buffers gzip output would hold messages back; bulk NDJSON
+            // transfers are the case where ~8-10x fewer wire bytes can pay for the extra
+            // decompression overhead (see StreamReadBufferSizeBytes for the Mono caveat).
             _compressedStreamHttpClientHandler = new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
@@ -1358,7 +1358,7 @@ namespace ApiClient.Runtime
 
                     // Flatten the response headers once. They are sent at the start of the stream and
                     // never change, but every framed message used to rebuild the whole dictionary from
-                    // them: 24.6k allocations in the 2026-08-05 deep-profile capture. Content headers
+                    // them — one dictionary plus one string per header, per message. Content headers
                     // are deliberately NOT hoisted — the SSE reader rewrites ContentLength on the shared
                     // response message for each message it frames, so those must stay per-message.
                     var streamHeaders = responseMessage.Headers.ToHeadersDictionary();
@@ -1367,9 +1367,8 @@ namespace ApiClient.Runtime
                     // Explicit read buffer. StreamReader defaults to 1024 bytes, and every refill of it
                     // becomes one SslStream.ReadAsync — for which Mono allocates a fresh ~16 KB
                     // BufferOffsetSize2 per operation. That is a ~16x amplification of every byte of
-                    // stream traffic, and it made those TLS buffers the single largest allocator in the
-                    // 2026-08-05 deep-profile captures at 29.7 MB / 2440 reads (22% of all bytes).
-                    // Reading in larger blocks cuts the operation count proportionally.
+                    // stream traffic, and it profiles as the largest allocator on Android. Reading in
+                    // larger blocks cuts the operation count proportionally.
                     using (StreamReader streamReader = new(contentStream, Encoding.UTF8, true, StreamReadBufferSizeBytes))
                     {
                         // start task that will update read delta regularly
