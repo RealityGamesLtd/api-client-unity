@@ -2,6 +2,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Change
+- Byte-array drain (`DrainResponseToByteArrayResponseAsync`) allocation profile: the assembly `MemoryStream` is presized from `Content-Length` (lengths above 512 MB are treated as untrusted and fall back to the growing stream), the 64 KB read buffer is rented from `ArrayPool<byte>.Shared`, and when the body fills the presized capacity exactly the internal buffer is handed over as the response instead of a full-size `ToArray()` copy — the exact-fit pattern the chunked Range path already used. Behavioral surface is unchanged: a missing or wrong `Content-Length` only reproduces the previous grow-and-copy behavior.
+
 ### Add
 - Stream reader-emit path: `StreamMessageReadContext` gains an optional `Func<FramedMessageTextReader, Task>` emit callback, and `NewlineDelimitedJsonStreamMessageReader` prefers it when present — a framed NDJSON line is handed to the transport as a reusable `TextReader` over the framing buffers (`CharSegmentTextReader` over the read chunk, `StringBuilderTextReader` over the reassembly builder) instead of being materialised as a string. `ApiClient.SendStreamRequest` deserializes that reader with a per-thread cached `JsonSerializer` (`CheckAdditionalContent` on, matching `JsonConvert.DeserializeObject`) through a `JsonTextReader` whose char buffers are recycled per thread (`JsonCharArrayPool`). NDJSON lines have reached 845 KB; on this path the per-message string, and the `StringBuilder.ToString` behind it, no longer exist.
 
