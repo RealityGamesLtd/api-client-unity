@@ -72,7 +72,23 @@ namespace ApiClient.Runtime.Streaming
         /// valid until the returned task completes — the framing reader reuses its buffers for
         /// the next message. Callers must check <see cref="SupportsReaderEmit"/> first.
         /// </summary>
-        public Task EmitMessageAsync(FramedMessageTextReader messageReader) => _emitMessageReader(messageReader);
+        /// <exception cref="InvalidOperationException">
+        /// The transport has no reader-emit callback (<see cref="SupportsReaderEmit"/> is false).
+        /// </exception>
+        public Task EmitMessageAsync(FramedMessageTextReader messageReader)
+        {
+            // Fail with the invariant rather than an NRE from a null callback: a reader that
+            // emits without checking SupportsReaderEmit is a bug in that reader, and the
+            // string overload is always available as the fallback.
+            if (_emitMessageReader == null)
+            {
+                throw new InvalidOperationException(
+                    "This transport does not support reader-emit. Check SupportsReaderEmit before " +
+                    "calling EmitMessageAsync(FramedMessageTextReader), or use EmitMessageAsync(string).");
+            }
+
+            return _emitMessageReader(messageReader);
+        }
 
         /// <summary>Reports a framing-level parsing failure for the given raw content.</summary>
         public Task EmitParsingErrorAsync(string rawContent, string message) => _emitParsingError(rawContent, message);

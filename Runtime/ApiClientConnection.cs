@@ -501,7 +501,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            bool allowCompressedResponse = false)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -516,11 +517,7 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
                 MessageReader = NewlineDelimitedJsonStreamMessageReader.Instance,
-                // EXPERIMENT (easy revert: delete this line): NDJSON responses may arrive
-                // gzipped — bulk cell waves, so wire bytes (and TLS buffer churn) drop ~8-10x
-                // when the server honours it. Verify on device that cells still stream
-                // progressively; a proxy that buffers gzip output would batch them instead.
-                AllowCompressedResponse = true,
+                AllowCompressedResponse = allowCompressedResponse,
             };
 
             if (jsonBody != null)

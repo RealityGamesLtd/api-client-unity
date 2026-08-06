@@ -43,11 +43,21 @@ namespace ApiClient.Runtime
         /// unaffected (a read returns as soon as any bytes arrive). Cost: one 64 KB buffer per ACTIVE
         /// stream, of which there are a handful.
         ///
-        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2, ~16 KB
-        /// per TLS record op — the top allocator in the 2026-08-05 deep captures): that scales with
-        /// WIRE BYTES and record count, not with how big our reads are — raising this buffer 1 KB →
-        /// 16 KB measurably did not move it. The levers for that bucket are less wire volume
-        /// (server-side payload pruning) and fewer requests. Not the same thing as
+        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2 — the top
+        /// allocator in the 2026-08 deep captures, 48 MB of a 238 MB session), and raising this
+        /// buffer 1 KB → 16 KB measurably did not move it. Mechanism, read off the shipped BCL
+        /// (unityaot System.dll): MobileAuthenticatedStream.StartOperation calls readBuffer.Reset()
+        /// twice per read — once up front, once in its finally — and Reset() unconditionally does
+        /// `Buffer = new byte[InitialSize]` (16500 for reads, 16384 for writes). So every TLS read
+        /// costs ~33 KB of garbage no matter how many bytes it returns: the bucket tracks the
+        /// OP COUNT, and one op yields at most one record, so at best it is ~2x the wire bytes.
+        /// Levers, in order: (1) don't let a gzipped body be read in 4 KB pieces —
+        /// DeflateStreamNative.UnmanagedRead pulls the base stream through its own `new byte[4096]`,
+        /// so an automatically-decompressed response pays ~33 KB per 4 KB of ciphertext and our
+        /// buffer never reaches the socket; decompress ourselves over a 64 KB BufferedStream (or,
+        /// for a non-streaming body, inflate from the fully drained buffer) instead;
+        /// (2) less wire volume (server-side payload pruning); (3) fewer requests/arrivals — for a
+        /// stream, each message that arrives in its own chunk is its own op. Not the same thing as
         /// <see cref="_streamBufferSize"/>, which is the char block the reader loop frames from.
         /// </summary>
         private const int StreamReadBufferSizeBytes = 64 * 1024;
@@ -71,6 +81,17 @@ namespace ApiClient.Runtime
         /// game, so <see cref="JsonSerializer.CreateDefault()"/> matches the convert path.
         /// </summary>
         [ThreadStatic] private static JsonSerializer _streamSerializerForThread;
+
+        /// <summary>
+        /// Ceiling on the up-front capacity a response header may ask the assembly buffer for
+        /// (byte-array drain: <c>Content-Length</c>; ranged download: the <c>Content-Range</c>
+        /// total). Real bodies here are map tiles and JSON payloads — orders of magnitude below
+        /// this — so the presize win is untouched, while a server or proxy that misreports the
+        /// length can no longer turn one header into a huge allocation on a phone. A body that
+        /// genuinely exceeds the cap still completes; it just grows the stream as it used to.
+        /// </summary>
+        private const long MaxPresizeBytes = 16L * 1024 * 1024;
+
         private readonly int _byteArrayBufferSize = 65536;
         private readonly int _progressReportThresholdBytes = 64 * 1024;
         private readonly int _progressReportThrottleMs = 100;
@@ -804,9 +825,8 @@ namespace ApiClient.Runtime
             // too — same handover as the chunked path below. Absent (chunked encoding) or
             // implausible lengths fall back to a growing stream; a lying header only costs the
             // old behaviour, never correctness.
-            const long maxTrustedContentLength = 512L * 1024 * 1024;
-            var presize = contentLengthFromHeader > 0 && contentLengthFromHeader <= maxTrustedContentLength
-                ? (int)contentLengthFromHeader
+            var presize = contentLengthFromHeader > 0
+                ? (int)Math.Min(contentLengthFromHeader, MaxPresizeBytes)
                 : 0;
 
             using var memoryStream = new MemoryStream(presize);
@@ -972,7 +992,7 @@ namespace ApiClient.Runtime
 
             var totalLength = probeRange.Length.Value;
 
-            using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, int.MaxValue));
+            using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, MaxPresizeBytes));
 
             long lastReportedBytes = -1;
             var progressSw = Stopwatch.StartNew();
