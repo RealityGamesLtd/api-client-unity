@@ -61,19 +61,28 @@ namespace ApiClient.Runtime.Streaming
                     context.ResponseMessage.Content.Headers.ContentLength = readString.Length;
                 }
 
+                // The parsing-error emit is awaited AFTER the sample closes: an await between
+                // BeginSample and EndSample can resume on a later frame, which breaks the
+                // per-frame pairing rule and logs Missing/Non-matching EndSample errors.
                 MatchCollection matches = null;
+                string regexError = null;
+                Profiler.BeginSample("Api Client Stream Regex Extraction");
                 try
                 {
-                    Profiler.BeginSample("Api Client Stream Regex Extraction");
                     matches = JsonExtractorRegex.Matches(readString);
                 }
                 catch (Exception ex)
                 {
-                    await context.EmitParsingErrorAsync(readString, ex.Message);
+                    regexError = ex.Message;
                 }
                 finally
                 {
                     Profiler.EndSample();
+                }
+
+                if (regexError != null)
+                {
+                    await context.EmitParsingErrorAsync(readString, regexError);
                 }
 
                 if (matches != null && matches.Count > 0)

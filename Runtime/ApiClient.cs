@@ -412,8 +412,13 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample("Api Client Execute Request [E]");
-
+                        // No profiler marker around the send: Begin/EndSample must pair within one
+                        // frame on one thread, and this block awaits the whole HTTP round-trip, so
+                        // the old "Api Client Execute Request [E]" marker both spammed
+                        // Missing/Non-matching EndSample errors whenever a continuation crossed a
+                        // frame and absorbed unrelated allocations in captures. Wire timing is
+                        // measured by the __wire stopwatch below; the synchronous parse has its own
+                        // marker inside ProcessJsonErrorResponse.
                         try
                         {
                             __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
@@ -443,8 +448,6 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
-
-                        Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
@@ -516,7 +519,7 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample("Api Client Execute Request");
+                        // No marker here either — see the note in the error-typed overload above.
                         try
                         {
                             __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
@@ -547,8 +550,6 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
-
-                        Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
@@ -1310,8 +1311,11 @@ namespace ApiClient.Runtime
 
                     await _middleware.ProcessRequest(request, true);
 
-                    Profiler.BeginSample("Api Client Execute Stream Request");
-
+                    // No whole-stream marker: the old "Api Client Execute Stream Request" span
+                    // covered the stream's entire lifetime (minutes of awaits), which both broke
+                    // the per-frame Begin/End pairing rule (Missing/Non-matching EndSample spam)
+                    // and made the marker useless for attribution. The synchronous per-message
+                    // work keeps its own "Api Client Stream Deserialization" markers below.
                     var streamClient = request.AllowCompressedResponse ? _compressedStreamHttpClient : _streamHttpClient;
                     using var responseMessage = await streamClient.SendAsync(
                         request.RequestMessage,
@@ -1477,7 +1481,6 @@ namespace ApiClient.Runtime
                 finally
                 {
                     updateReadDeltaValueCts?.Cancel();
-                    Profiler.EndSample();
                 }
 
                 async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
@@ -1536,18 +1539,22 @@ namespace ApiClient.Runtime
             }
         }
 
-        protected async Task<string> ReadBodyForLoggingAsync(Stream memoryStream, HttpContentHeaders headers)
+        protected Task<string> ReadBodyForLoggingAsync(Stream memoryStream, HttpContentHeaders headers)
         {
             if (!_bodyLogging)
-                return string.Empty;
+                return Task.FromResult(string.Empty);
 
+            // Synchronous read: the stream is an in-memory buffer, so ReadToEnd never blocks on
+            // IO, and keeping the whole body inside the sample means the Begin/End pair can't be
+            // split across frames by an await (the old ReadToEndAsync inside the sample risked
+            // exactly that).
             Profiler.BeginSample("Api Client Body Read");
             try
             {
                 memoryStream.Position = 0;
                 var bodyJsonStream = memoryStream;
                 using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
-                return await bodyStreamReader.ReadToEndAsync();
+                return Task.FromResult(bodyStreamReader.ReadToEnd());
             }
             finally
             {
