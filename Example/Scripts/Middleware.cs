@@ -39,9 +39,9 @@ namespace ApiClientExample
 
         private void HandleError(IHttpResponse response)
         {
-            var requestHostToConsiderGameBackend = "reality.co";
+            var requestHostToConsiderGameBackend = "api.example.com";
 
-            //Only monitor requests that are going to reality.co hosts
+            //Only monitor requests that are going to your own backend hosts
             if (response?.RequestUri?.Host == null) return;
             if (response.RequestUri?.Host?.Equals(requestHostToConsiderGameBackend) == false) return;
 

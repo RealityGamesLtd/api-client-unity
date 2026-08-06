@@ -54,14 +54,14 @@ namespace ApiClientExample
             responseView.SetActive(true);
             responseText.text = "";
 
-            // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.wearerealitygames.com:443/landlord-beta/auth/providers/anon", null, _cts.Token);
+            // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>("https://api.example.com:443/auth/providers/anon", null, _cts.Token);
             // var request = Session.Instance.ApiClientConnecton.CreatePost<LrtResponse<AnonRegisterResponse>, ServerErrorResponse>(
             //     "https://httpstat.us/500", 
             //     JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
             //     _cts.Token);
 
             var request = Session.Instance.ApiClientConnecton.CreatePost<System.Object, ServerErrorResponse>(
-                "https://configs.mwostg.r10s.r5y.io/config",
+                "https://api.example.com/config",
                 JsonConvert.SerializeObject(new RequestMatchmakingPostData(false)),
                 _cts.Token,
                 Session.authenticationHeaderValue);
@@ -107,7 +107,7 @@ namespace ApiClientExample
             _streamRequestCts = new();
 
             var authentication = new AuthenticationHeaderValue("Bearer", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkwOTc2Ni02NzQ4LTYyMzItOTY0ZC1lN2NhMWZiM2VlYjgiLCJyb2xlIjoicGxheWVyIiwidG9rZW5UeXBlIjoibXdvLWFjY2VzcyIsImV4cCI6MTcyMDUzMDU5MCwiaWF0IjoxNzIwNTI2OTkwfQ.M49L-VNpL0TT9BBftr4EjDIAyNABquoVqeS2ddeq8OdLGfhfCuSV5l4xv8qeUrweDMQAF3emKdfjQWYVvzWIvvMmohBxyruk5PXKeoUu_HzUxM5oWGSRtaE9KVL_buaVtfxEZ9huMV8-jTOF0fREvRIf50gaXFc5ayRhAh2id5oSxBWNiZpjEmPfoG-n96R3oRZYRdXplwxCL26EaV9Yp9EsRa-6kzn0ob0eSN2fWjZbA-xBTg-Fq38DbpfBP62a0Ozu6zFhz-Jn9AK8uNp0AHPweZpxoCNeqDrp2DaR5s5Uvnbl7YefPcAK1s04xYiAFSubjd87sEzt9k3IM8qF9oQUA5u-mIpek2qQP9J9b9K0kEUysS79wSY7Ubrqi7JjCjhxj43EGYIBPZHf9E6_SYcOE7KhMgQcmiQyqhIIEdPBVyiBocdWda2cIfxdxsDZmjUCXGQqQHmvPJn0k3sXTrJdOnw7aVndmIAd8vsV2yevwbLPThR-RRIr99Jp-ef86P8X02Dn_eQnZW2pcUCClNyY5ZazYr2LbvCv21w03oBkkR54Docfarz6olNAVC-t8wxmofWT_56WMG0nPezkSkxsQucmJwmy9D_Xit19LSDepn83VcXVa8juQowplww2QptSjyB8LMZbPT5t4N-XbRcBIXXVK6PIVxk-mBWVE5g");
-            var request = Session.Instance.ApiClientConnecton.CreateGetStreamRequest<StreamData>("https://sse-player-messages.mwodev.r10s.r5y.io/stream", _streamRequestCts.Token, authentication);
+            var request = Session.Instance.ApiClientConnecton.CreateGetStreamRequest<StreamData>("https://stream.example.com/stream", _streamRequestCts.Token, authentication);
 
             await request.Send(streamResponse =>
             {

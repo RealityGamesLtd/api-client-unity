@@ -501,7 +501,8 @@ namespace ApiClient.Runtime
             AuthenticationHeaderValue authentication = null,
             Dictionary<string, string> headers = null,
             bool useDefaultHeaders = true,
-            string priorityLane = null)
+            string priorityLane = null,
+            bool allowCompressedResponse = false)
         {
             var request = new HttpClientStreamRequest<T>(
                 new HttpRequestMessage(HttpMethod.Put, url)
@@ -516,6 +517,7 @@ namespace ApiClient.Runtime
                 DefaultHeaders = useDefaultHeaders ? _defaultHeaders : null,
                 PriorityLane = priorityLane,
                 MessageReader = NewlineDelimitedJsonStreamMessageReader.Instance,
+                AllowCompressedResponse = allowCompressedResponse,
             };
 
             if (jsonBody != null)

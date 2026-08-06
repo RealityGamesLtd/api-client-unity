@@ -26,9 +26,12 @@ namespace ApiClient.Runtime
         public IApiClientMiddleware Middleware { get; set; }
 
         /// <summary>
-        /// Stream buffer size in bytes. Default = 4096 bytes
+        /// Char block the stream reader loop frames messages from. Default = 16384 chars.
+        /// Each loop iteration is one <c>StreamReader.ReadAsync</c>, and Mono wraps every such
+        /// read in a timeout (linked CancellationTokenSource + Task.Delay + WhenAny), so larger
+        /// blocks cut that per-read machinery proportionally during message waves.
         /// </summary>
-        public int StreamBufferSize { get; set; } = 4096;
+        public int StreamBufferSize { get; set; } = 16384;
 
         /// <summary>
         /// Buffer size for byte array requests in bytes. Default = 65536 bytes (64 KB).

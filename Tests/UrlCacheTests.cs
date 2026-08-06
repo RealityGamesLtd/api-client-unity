@@ -219,7 +219,7 @@ namespace ApiClient.Tests
             var t = new TaskCompletionSource<IHttpResponse>();
             t.SetResult(new HttpResponse<byte[]>(
                     new byte[] { 2, 155, 3 },
-                    null,
+                    (System.Net.Http.Headers.HttpResponseHeaders)null,
                     null,
                     null,
                     uri,

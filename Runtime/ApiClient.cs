@@ -35,8 +35,63 @@ namespace ApiClient.Runtime
         private readonly HttpClient _httpClient;
         private readonly HttpClient _streamHttpClient;
         private readonly IApiClientMiddleware _middleware;
-        private readonly int _streamBufferSize = 4096;
+        /// <summary>
+        /// Byte buffer a stream's <see cref="StreamReader"/> refills from the transport. Each refill
+        /// is one HTTP-level read, and Mono wraps every such read in a timeout (linked
+        /// CancellationTokenSource + Task.Delay + WhenAny) plus chunk-parser iterations, so larger
+        /// refills cut that per-read machinery proportionally during message waves. Idle streams are
+        /// unaffected (a read returns as soon as any bytes arrive). Cost: one 64 KB buffer per ACTIVE
+        /// stream, of which there are a handful.
+        ///
+        /// ⚠️ This does NOT reduce Mono's SslStream record-buffer churn (BufferOffsetSize2), which
+        /// profiles as the largest single allocator on Android; raising this buffer 1 KB → 16 KB
+        /// measurably did not move it. Mechanism, read off the shipped BCL
+        /// (unityaot System.dll): MobileAuthenticatedStream.StartOperation calls readBuffer.Reset()
+        /// twice per read — once up front, once in its finally — and Reset() unconditionally does
+        /// `Buffer = new byte[InitialSize]` (16500 for reads, 16384 for writes). So every TLS read
+        /// costs ~33 KB of garbage no matter how many bytes it returns: the bucket tracks the
+        /// OP COUNT, and one op yields at most one record, so at best it is ~2x the wire bytes.
+        /// Levers, in order: (1) don't let a gzipped body be read in 4 KB pieces —
+        /// DeflateStreamNative.UnmanagedRead pulls the base stream through its own `new byte[4096]`,
+        /// so an automatically-decompressed response pays ~33 KB per 4 KB of ciphertext and our
+        /// buffer never reaches the socket; decompress ourselves over a 64 KB BufferedStream (or,
+        /// for a non-streaming body, inflate from the fully drained buffer) instead;
+        /// (2) less wire volume (server-side payload pruning); (3) fewer requests/arrivals — for a
+        /// stream, each message that arrives in its own chunk is its own op. Not the same thing as
+        /// <see cref="_streamBufferSize"/>, which is the char block the reader loop frames from.
+        /// </summary>
+        private const int StreamReadBufferSizeBytes = 64 * 1024;
+
+        private readonly int _streamBufferSize = 16384;
         private readonly int _streamReadDeltaUpdateTime = 1000;
+
+        /// <summary>
+        /// How much of a framed message is materialised for the parsing-error report when the
+        /// reader-emit path fails to deserialize it. The happy path never builds the string.
+        /// </summary>
+        private const int StreamParsingErrorCaptureChars = 4096;
+
+        /// <summary>
+        /// Serializer for the stream reader-emit path, cached per thread because stream
+        /// messages deserialize on pool threads and <see cref="JsonSerializer"/> is not
+        /// thread-safe. <see cref="JsonSerializer.CheckAdditionalContent"/> mirrors
+        /// <see cref="JsonConvert.DeserializeObject{T}(string)"/>, which enables it when given
+        /// no settings — trailing garbage after the JSON value must stay a parsing error.
+        /// <see cref="JsonConvert.DefaultSettings"/> is never assigned in this repo or the
+        /// game, so <see cref="JsonSerializer.CreateDefault()"/> matches the convert path.
+        /// </summary>
+        [ThreadStatic] private static JsonSerializer _streamSerializerForThread;
+
+        /// <summary>
+        /// Ceiling on the up-front capacity a response header may ask the assembly buffer for
+        /// (byte-array drain: <c>Content-Length</c>; ranged download: the <c>Content-Range</c>
+        /// total). Real bodies here are map tiles and JSON payloads — orders of magnitude below
+        /// this — so the presize win is untouched, while a server or proxy that misreports the
+        /// length can no longer turn one header into a huge allocation on a phone. A body that
+        /// genuinely exceeds the cap still completes; it just grows the stream as it used to.
+        /// </summary>
+        private const long MaxPresizeBytes = 16L * 1024 * 1024;
+
         private readonly int _byteArrayBufferSize = 65536;
         private readonly int _progressReportThresholdBytes = 64 * 1024;
         private readonly int _progressReportThrottleMs = 100;
@@ -50,6 +105,8 @@ namespace ApiClient.Runtime
         private const string HttpClientKey = "httpClient";
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClientHandler _streamHttpClientHandler;
+        private readonly HttpClientHandler _compressedStreamHttpClientHandler;
+        private readonly HttpClient _compressedStreamHttpClient;
 
         public ApiClient(ApiClientOptions options)
         {
@@ -70,6 +127,22 @@ namespace ApiClient.Runtime
                 AutomaticDecompression = DecompressionMethods.None
             };
             _streamHttpClient = new HttpClient(_streamHttpClientHandler, disposeHandler: true)
+            {
+                Timeout = options.Timeout
+            };
+
+            // Streams that opt in (HttpClientStreamRequest.AllowCompressedResponse) go through a
+            // handler with decompression enabled. A separate client is required, not a header:
+            // Mono derives the Accept-Encoding header from the HANDLER's AutomaticDecompression at
+            // send time, so per-request header edits cannot control stream compression. Kept OFF
+            // for SSE — a proxy that buffers gzip output would hold messages back; bulk NDJSON
+            // transfers are the case where ~8-10x fewer wire bytes can pay for the extra
+            // decompression overhead (see StreamReadBufferSizeBytes for the Mono caveat).
+            _compressedStreamHttpClientHandler = new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+            _compressedStreamHttpClient = new HttpClient(_compressedStreamHttpClientHandler, disposeHandler: true)
             {
                 Timeout = options.Timeout
             };
@@ -360,8 +433,13 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample($"Api Client Execute Request [E]: {request.Uri}");
-
+                        // No profiler marker around the send: Begin/EndSample must pair within one
+                        // frame on one thread, and this block awaits the whole HTTP round-trip, so
+                        // the old "Api Client Execute Request [E]" marker both spammed
+                        // Missing/Non-matching EndSample errors whenever a continuation crossed a
+                        // frame and absorbed unrelated allocations in captures. Wire timing is
+                        // measured by the __wire stopwatch below; the synchronous parse has its own
+                        // marker inside ProcessJsonErrorResponse.
                         try
                         {
                             __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
@@ -391,8 +469,6 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
-
-                        Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
@@ -464,7 +540,7 @@ namespace ApiClient.Runtime
 
                         await _middleware.ProcessRequest(request, false);
 
-                        Profiler.BeginSample($"Api Client Execute Request: {request.Uri}");
+                        // No marker here either — see the note in the error-typed overload above.
                         try
                         {
                             __wire = TimeSpan.Zero; // reset per attempt so a prior attempt's time can't leak
@@ -495,8 +571,6 @@ namespace ApiClient.Runtime
                             var message = $"Type: {ex.GetType()}\nMessage: {ex.Message}\nInner exception type:{ex.InnerException?.GetType()}\nInner exception: {ex.InnerException?.Message}\n";
                             response = new NetworkErrorHttpResponse(message, request.RequestMessage);
                         }
-
-                        Profiler.EndSample();
 
                         return await _middleware.ProcessResponse(response, request.RequestId, false);
                     }, new Dictionary<string, object>() { { HttpClientKey, _httpClient }, { NewAuthenticationHeaderValueKey, null } }, req.CancellationToken, true);
@@ -742,48 +816,65 @@ namespace ApiClient.Runtime
 
             var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
             var totalBytesRead = 0L;
-            var buffer = new byte[_byteArrayBufferSize];
+            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_byteArrayBufferSize);
             var isMoreToRead = true;
 
-            using var memoryStream = new MemoryStream();
+            // Presize from Content-Length so the assembly buffer never grows (each MemoryStream
+            // doubling copies everything read so far). When the body then fills the capacity
+            // exactly, the buffer itself is the result and the final ToArray() copy is skipped
+            // too — same handover as the chunked path below. Absent (chunked encoding) or
+            // implausible lengths fall back to a growing stream; a lying header only costs the
+            // old behaviour, never correctness.
+            var presize = contentLengthFromHeader > 0
+                ? (int)Math.Min(contentLengthFromHeader, MaxPresizeBytes)
+                : 0;
+
+            using var memoryStream = new MemoryStream(presize);
 
             long lastReportedBytes = -1;
             var progressSw = Stopwatch.StartNew();
 
-            do
+            try
             {
-                ct.ThrowIfCancellationRequested();
-
-                if (gateBetweenReads && _priority != null && request.PriorityLane != null)
+                do
                 {
-                    await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
-                }
+                    ct.ThrowIfCancellationRequested();
 
-                var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
-                if (bytesRead == 0)
-                {
-                    isMoreToRead = false;
+                    if (gateBetweenReads && _priority != null && request.PriorityLane != null)
+                    {
+                        await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
+                    }
+
+                    var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        isMoreToRead = false;
+
+                        if (_verboseLogging)
+                        {
+                            Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                        }
+
+                        continue;
+                    }
+
+                    await memoryStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
+                    totalBytesRead += bytesRead;
 
                     if (_verboseLogging)
                     {
-                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
                     }
 
-                    continue;
+                    MaybeReportProgress(progressCallback, totalBytesRead, contentLengthFromHeader,
+                        ref lastReportedBytes, progressSw, forceFinal: false);
                 }
-
-                await memoryStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
-                totalBytesRead += bytesRead;
-
-                if (_verboseLogging)
-                {
-                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
-                }
-
-                MaybeReportProgress(progressCallback, totalBytesRead, contentLengthFromHeader,
-                    ref lastReportedBytes, progressSw, forceFinal: false);
+                while (isMoreToRead);
             }
-            while (isMoreToRead);
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            }
 
             ct.ThrowIfCancellationRequested();
 
@@ -795,7 +886,20 @@ namespace ApiClient.Runtime
                     ref lastReportedBytes, progressSw, forceFinal: true);
             }
 
-            var responseBytes = memoryStream.ToArray();
+            // Exact fit (Content-Length was right): hand over the presized buffer instead of
+            // copying it. Mismatch or no presize: ToArray() as before.
+            byte[] responseBytes;
+            if (memoryStream.Length > 0
+                && memoryStream.TryGetBuffer(out var drained)
+                && drained.Offset == 0
+                && drained.Count == drained.Array.Length)
+            {
+                responseBytes = drained.Array;
+            }
+            else
+            {
+                responseBytes = memoryStream.ToArray();
+            }
 
             UpdateResponseMetrics(responseBytes.Length, contentLengthFromHeader);
 
@@ -888,7 +992,7 @@ namespace ApiClient.Runtime
 
             var totalLength = probeRange.Length.Value;
 
-            using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, int.MaxValue));
+            using var memoryStream = new MemoryStream(capacity: (int)Math.Min(totalLength, MaxPresizeBytes));
 
             long lastReportedBytes = -1;
             var progressSw = Stopwatch.StartNew();
@@ -950,7 +1054,22 @@ namespace ApiClient.Runtime
 
             ct.ThrowIfCancellationRequested();
 
-            var responseBytes = memoryStream.ToArray();
+            // The stream was created with capacity == totalLength and filled to exactly that, so its
+            // internal buffer is already the array we want. ToArray() would allocate a second full-size
+            // copy, doubling peak memory for the whole transfer. Hand the buffer over when the fit is
+            // exact, and only copy if it is not.
+            byte[] responseBytes;
+            if (memoryStream.TryGetBuffer(out var assembled)
+                && assembled.Offset == 0
+                && assembled.Count == assembled.Array.Length)
+            {
+                responseBytes = assembled.Array;
+            }
+            else
+            {
+                responseBytes = memoryStream.ToArray();
+            }
+
             UpdateResponseMetrics(responseBytes.Length, totalLength);
 
             // The probe's Content-Range / chunk Content-Length describe the first chunk
@@ -1191,7 +1310,12 @@ namespace ApiClient.Runtime
                 DateTime streamLastReadTime = DateTime.UtcNow;
                 var updateReadDeltaValueCts = new CancellationTokenSource();
 
-                request.RequestMessage.Headers.Remove("Accept-Encoding");
+                // The header is handler-driven in Mono (see the compressed-client comment in the
+                // ctor); this strip is defensive for headers a caller added on the message itself.
+                if (!request.AllowCompressedResponse)
+                {
+                    request.RequestMessage.Headers.Remove("Accept-Encoding");
+                }
 
                 try
                 {
@@ -1207,9 +1331,13 @@ namespace ApiClient.Runtime
 
                     await _middleware.ProcessRequest(request, true);
 
-                    Profiler.BeginSample($"Api Client Execute Stream Request: {request.Uri}");
-
-                    using var responseMessage = await _streamHttpClient.SendAsync(
+                    // No whole-stream marker: the old "Api Client Execute Stream Request" span
+                    // covered the stream's entire lifetime (minutes of awaits), which both broke
+                    // the per-frame Begin/End pairing rule (Missing/Non-matching EndSample spam)
+                    // and made the marker useless for attribution. The synchronous per-message
+                    // work keeps its own "Api Client Stream Deserialization" markers below.
+                    var streamClient = request.AllowCompressedResponse ? _compressedStreamHttpClient : _streamHttpClient;
+                    using var responseMessage = await streamClient.SendAsync(
                         request.RequestMessage,
                         HttpCompletionOption.ResponseHeadersRead,
                         request.CancellationToken);
@@ -1228,8 +1356,20 @@ namespace ApiClient.Runtime
                         return;
                     }
 
+                    // Flatten the response headers once. They are sent at the start of the stream and
+                    // never change, but every framed message used to rebuild the whole dictionary from
+                    // them — one dictionary plus one string per header, per message. Content headers
+                    // are deliberately NOT hoisted — the SSE reader rewrites ContentLength on the shared
+                    // response message for each message it frames, so those must stay per-message.
+                    var streamHeaders = responseMessage.Headers.ToHeadersDictionary();
+
                     await using var contentStream = await responseMessage.Content.ReadAsStreamAsync();
-                    using (StreamReader streamReader = new(contentStream, encoding: Encoding.UTF8, true))
+                    // Explicit read buffer. StreamReader defaults to 1024 bytes, and every refill of it
+                    // becomes one SslStream.ReadAsync — for which Mono allocates a fresh ~16 KB
+                    // BufferOffsetSize2 per operation. That is a ~16x amplification of every byte of
+                    // stream traffic, and it profiles as the largest allocator on Android. Reading in
+                    // larger blocks cuts the operation count proportionally.
+                    using (StreamReader streamReader = new(contentStream, Encoding.UTF8, true, StreamReadBufferSizeBytes))
                     {
                         // start task that will update read delta regularly
                         _ = UpdateReadDeltaValueTask(() => { return streamLastReadTime; }, readDelta, updateReadDeltaValueCts.Token).HandleTaskContinuation();
@@ -1271,9 +1411,49 @@ namespace ApiClient.Runtime
 
                             OnStreamResponse?.Invoke(new HttpResponse<T>(
                                 content,
-                                responseMessage.Headers,
-                                responseMessage.Content?.Headers,
+                                streamHeaders,
+                                responseMessage.Content?.Headers.ToHeadersDictionary(),
                                 jsonString,
+                                request.RequestMessage.RequestUri,
+                                responseMessage.StatusCode));
+                        }
+
+                        // Reader-emit path: Newtonsoft parses straight from the framing buffers,
+                        // so the message never exists as a string (NDJSON lines have reached
+                        // 845 KB) and the response's Body is null. The SSE reader never calls
+                        // this — its consumers re-parse the raw body per message type
+                        // (StreamServiceMessageParser), so the string there is load-bearing.
+                        async Task EmitStreamMessageFromReaderAsync(FramedMessageTextReader messageReader)
+                        {
+                            T content;
+                            try
+                            {
+                                Profiler.BeginSample("Api Client Stream Deserialization");
+                                using var jsonReader = new JsonTextReader(messageReader)
+                                {
+                                    // The framed reader is reused for the next message; nothing to close.
+                                    CloseInput = false,
+                                    ArrayPool = JsonCharArrayPool.Instance,
+                                };
+                                content = GetStreamSerializer().Deserialize<T>(jsonReader);
+                                Profiler.EndSample();
+                            }
+                            catch (Exception ex)
+                            {
+                                Profiler.EndSample();
+                                // The raw text is only materialised once parsing has already
+                                // failed, and bounded so a huge corrupt line cannot balloon it.
+                                await EmitParsingErrorAsync(
+                                    messageReader.CaptureBounded(StreamParsingErrorCaptureChars),
+                                    ex.Message);
+                                return;
+                            }
+
+                            OnStreamResponse?.Invoke(new HttpResponse<T>(
+                                content,
+                                streamHeaders,
+                                responseMessage.Content?.Headers.ToHeadersDictionary(),
+                                null,
                                 request.RequestMessage.RequestUri,
                                 responseMessage.StatusCode));
                         }
@@ -1284,6 +1464,9 @@ namespace ApiClient.Runtime
                             _streamBufferSize,
                             request.CancellationToken,
                             EmitStreamMessageAsync,
+                            // Verbose logging prints each message, which needs the string —
+                            // fall back to the materialising path for that build setting.
+                            _verboseLogging ? null : EmitStreamMessageFromReaderAsync,
                             EmitParsingErrorAsync,
                             () => streamLastReadTime = DateTime.UtcNow);
 
@@ -1317,7 +1500,6 @@ namespace ApiClient.Runtime
                 finally
                 {
                     updateReadDeltaValueCts?.Cancel();
-                    Profiler.EndSample();
                 }
 
                 async Task UpdateReadDeltaValueTask(Func<DateTime> streamLastRead, Action<TimeSpan> readDelta, CancellationToken ct)
@@ -1339,6 +1521,20 @@ namespace ApiClient.Runtime
         }
 
         #region Helper Methods
+
+        /// <summary>See <see cref="_streamSerializerForThread"/> for the caching rationale.</summary>
+        private static JsonSerializer GetStreamSerializer()
+        {
+            var serializer = _streamSerializerForThread;
+            if (serializer == null)
+            {
+                serializer = JsonSerializer.CreateDefault();
+                serializer.CheckAdditionalContent = true;
+                _streamSerializerForThread = serializer;
+            }
+
+            return serializer;
+        }
 
         protected T DeserializeJson<T>(Stream memoryStream, HttpContentHeaders headers, string profilerLabel, out long bytesRead)
         {
@@ -1362,18 +1558,22 @@ namespace ApiClient.Runtime
             }
         }
 
-        protected async Task<string> ReadBodyForLoggingAsync(Stream memoryStream, HttpContentHeaders headers)
+        protected Task<string> ReadBodyForLoggingAsync(Stream memoryStream, HttpContentHeaders headers)
         {
             if (!_bodyLogging)
-                return string.Empty;
+                return Task.FromResult(string.Empty);
 
+            // Synchronous read: the stream is an in-memory buffer, so ReadToEnd never blocks on
+            // IO, and keeping the whole body inside the sample means the Begin/End pair can't be
+            // split across frames by an await (the old ReadToEndAsync inside the sample risked
+            // exactly that).
             Profiler.BeginSample("Api Client Body Read");
             try
             {
                 memoryStream.Position = 0;
                 var bodyJsonStream = memoryStream;
                 using var bodyStreamReader = new StreamReader(bodyJsonStream, Encoding.UTF8, true, 1024, leaveOpen: true);
-                return await bodyStreamReader.ReadToEndAsync();
+                return Task.FromResult(bodyStreamReader.ReadToEnd());
             }
             finally
             {
@@ -1542,6 +1742,7 @@ namespace ApiClient.Runtime
             {
                 _httpClient?.Dispose();
                 _streamHttpClient?.Dispose();
+                _compressedStreamHttpClient?.Dispose();
                 OnRequestCompleted = null;
             }
 

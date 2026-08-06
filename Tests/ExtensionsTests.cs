@@ -139,7 +139,7 @@ namespace ApiClient.Tests
             // Arrange
             var response = new HttpResponse<byte[]>(
                 null,
-                null,
+                (System.Net.Http.Headers.HttpResponseHeaders)null,
                 null,
                 null,
                 new Uri("http://test.com"),
@@ -161,7 +161,7 @@ namespace ApiClient.Tests
             // Arrange
             var response = new HttpResponse<byte[]>(
                 null,
-                null,
+                (System.Net.Http.Headers.HttpResponseHeaders)null,
                 null,
                 null,
                 new Uri("http://test.com"),
@@ -183,7 +183,7 @@ namespace ApiClient.Tests
             var invalidImageData = new byte[] { 0x00, 0x01, 0x02, 0x03 }; // Not a valid image
             var response = new HttpResponse<byte[]>(
                 invalidImageData,
-                null,
+                (System.Net.Http.Headers.HttpResponseHeaders)null,
                 null,
                 null,
                 new Uri("http://test.com/image.png"),

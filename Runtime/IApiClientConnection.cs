@@ -11,7 +11,14 @@ namespace ApiClient.Runtime
         IApiClient APIClient { get; }
         void SetDefaultHeader(string key, string value);
         HttpClientStreamRequest<T> CreateGetStreamRequest<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, string priorityLane = null);
-        HttpClientStreamRequest<T> CreatePutStreamRequest<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, string priorityLane = null);
+        /// <param name="allowCompressedResponse">
+        /// Opt in to <c>Accept-Encoding: gzip</c> for this stream. Off by default: it trades wire
+        /// bytes for delivery shape (a proxy that buffers gzip output batches messages instead of
+        /// streaming them) and, on Mono, gzipped bodies are pulled off the TLS stream in 4 KB
+        /// pieces, which multiplies SslStream record-buffer churn — see the note on
+        /// <c>StreamReadBufferSizeBytes</c> in <see cref="ApiClient"/>. Measure both before enabling.
+        /// </param>
+        HttpClientStreamRequest<T> CreatePutStreamRequest<T>(string url, string jsonBody, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, string priorityLane = null, bool allowCompressedResponse = false);
         HttpClientByteArrayRequest CreateGetByteArrayRequest(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null, string priorityLane = null);
         HttpClientRequest<T, E> CreateGet<T, E>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null, string priorityLane = null);
         HttpClientRequest<T> CreateGet<T>(string url, CancellationToken ct, AuthenticationHeaderValue authentication = null, Dictionary<string, string> headers = null, bool useDefaultHeaders = true, CachePolicy cachePolicy = null, string priorityLane = null);

@@ -29,21 +29,31 @@ namespace ApiClient.Runtime.Streaming
                 context.CancellationToken.ThrowIfCancellationRequested();
 
                 int charsRead = await reader.ReadAsync(buffer, context.CancellationToken);
-                var readString = new string(buffer, 0, charsRead);
 
                 context.NotifyRead();
 
-                if (readString.EndsWith("\n\n") == false)
+                // Test the delimiter on the chunk itself. Materialising the whole chunk as a string
+                // first allocated one copy per read even when the chunk was only going to be buffered.
+                bool endsMessage = charsRead >= 2
+                                   && buffer[charsRead - 1] == '\n'
+                                   && buffer[charsRead - 2] == '\n';
+
+                if (endsMessage == false)
                 {
-                    partialMessageBuilder.Append(readString);
+                    partialMessageBuilder.Append(buffer, 0, charsRead);
                     continue;
                 }
 
+                string readString;
                 if (partialMessageBuilder.Length > 0)
                 {
-                    partialMessageBuilder.Append(readString);
+                    partialMessageBuilder.Append(buffer, 0, charsRead);
                     readString = partialMessageBuilder.ToString();
                     partialMessageBuilder.Clear();
+                }
+                else
+                {
+                    readString = new string(buffer, 0, charsRead);
                 }
 
                 if (context.ResponseMessage.Content != null)
@@ -51,19 +61,28 @@ namespace ApiClient.Runtime.Streaming
                     context.ResponseMessage.Content.Headers.ContentLength = readString.Length;
                 }
 
+                // The parsing-error emit is awaited AFTER the sample closes: an await between
+                // BeginSample and EndSample can resume on a later frame, which breaks the
+                // per-frame pairing rule and logs Missing/Non-matching EndSample errors.
                 MatchCollection matches = null;
+                string regexError = null;
+                Profiler.BeginSample("Api Client Stream Regex Extraction");
                 try
                 {
-                    Profiler.BeginSample("Api Client Stream Regex Extraction");
                     matches = JsonExtractorRegex.Matches(readString);
                 }
                 catch (Exception ex)
                 {
-                    await context.EmitParsingErrorAsync(readString, ex.Message);
+                    regexError = ex.Message;
                 }
                 finally
                 {
                     Profiler.EndSample();
+                }
+
+                if (regexError != null)
+                {
+                    await context.EmitParsingErrorAsync(readString, regexError);
                 }
 
                 if (matches != null && matches.Count > 0)
