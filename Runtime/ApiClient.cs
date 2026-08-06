@@ -794,48 +794,66 @@ namespace ApiClient.Runtime
 
             var contentLengthFromHeader = responseMessage.Content.Headers.ContentLength ?? 0L;
             var totalBytesRead = 0L;
-            var buffer = new byte[_byteArrayBufferSize];
+            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_byteArrayBufferSize);
             var isMoreToRead = true;
 
-            using var memoryStream = new MemoryStream();
+            // Presize from Content-Length so the assembly buffer never grows (each MemoryStream
+            // doubling copies everything read so far). When the body then fills the capacity
+            // exactly, the buffer itself is the result and the final ToArray() copy is skipped
+            // too — same handover as the chunked path below. Absent (chunked encoding) or
+            // implausible lengths fall back to a growing stream; a lying header only costs the
+            // old behaviour, never correctness.
+            const long maxTrustedContentLength = 512L * 1024 * 1024;
+            var presize = contentLengthFromHeader > 0 && contentLengthFromHeader <= maxTrustedContentLength
+                ? (int)contentLengthFromHeader
+                : 0;
+
+            using var memoryStream = new MemoryStream(presize);
 
             long lastReportedBytes = -1;
             var progressSw = Stopwatch.StartNew();
 
-            do
+            try
             {
-                ct.ThrowIfCancellationRequested();
-
-                if (gateBetweenReads && _priority != null && request.PriorityLane != null)
+                do
                 {
-                    await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
-                }
+                    ct.ThrowIfCancellationRequested();
 
-                var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
-                if (bytesRead == 0)
-                {
-                    isMoreToRead = false;
+                    if (gateBetweenReads && _priority != null && request.PriorityLane != null)
+                    {
+                        await _priority.WaitForYieldedLanesIdleAsync(request.PriorityLane, ct).ConfigureAwait(false);
+                    }
+
+                    var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        isMoreToRead = false;
+
+                        if (_verboseLogging)
+                        {
+                            Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                        }
+
+                        continue;
+                    }
+
+                    await memoryStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
+                    totalBytesRead += bytesRead;
 
                     if (_verboseLogging)
                     {
-                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} All bytes read.");
+                        Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
                     }
 
-                    continue;
+                    MaybeReportProgress(progressCallback, totalBytesRead, contentLengthFromHeader,
+                        ref lastReportedBytes, progressSw, forceFinal: false);
                 }
-
-                await memoryStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
-                totalBytesRead += bytesRead;
-
-                if (_verboseLogging)
-                {
-                    Debug.Log($"{nameof(ApiClient)}:{nameof(SendByteArrayRequest)} Update progress: {totalBytesRead}/{contentLengthFromHeader}.");
-                }
-
-                MaybeReportProgress(progressCallback, totalBytesRead, contentLengthFromHeader,
-                    ref lastReportedBytes, progressSw, forceFinal: false);
+                while (isMoreToRead);
             }
-            while (isMoreToRead);
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            }
 
             ct.ThrowIfCancellationRequested();
 
@@ -847,7 +865,20 @@ namespace ApiClient.Runtime
                     ref lastReportedBytes, progressSw, forceFinal: true);
             }
 
-            var responseBytes = memoryStream.ToArray();
+            // Exact fit (Content-Length was right): hand over the presized buffer instead of
+            // copying it. Mismatch or no presize: ToArray() as before.
+            byte[] responseBytes;
+            if (memoryStream.Length > 0
+                && memoryStream.TryGetBuffer(out var drained)
+                && drained.Offset == 0
+                && drained.Count == drained.Array.Length)
+            {
+                responseBytes = drained.Array;
+            }
+            else
+            {
+                responseBytes = memoryStream.ToArray();
+            }
 
             UpdateResponseMetrics(responseBytes.Length, contentLengthFromHeader);
 
